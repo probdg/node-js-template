@@ -80,6 +80,14 @@ export const config = {
     maxRequests: getEnvNumber('RATE_LIMIT_MAX_REQUESTS', 100),
   },
 
+  // DDoS Detection
+  ddos: {
+    windowSeconds: getEnvNumber('DDOS_WINDOW_SECONDS', 60),
+    requestThreshold: getEnvNumber('DDOS_REQUEST_THRESHOLD', 100),
+    blockThreshold: getEnvNumber('DDOS_BLOCK_THRESHOLD', 200),
+    blockDuration: getEnvNumber('DDOS_BLOCK_DURATION', 300), // 5 minutes
+  },
+
   // Logging
   logging: {
     level: getEnv('LOG_LEVEL', 'info'),
