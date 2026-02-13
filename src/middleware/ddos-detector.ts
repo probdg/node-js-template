@@ -82,7 +82,7 @@ async function checkDDoS(
     // Try to use Redis for distributed tracking
     const client = await redisService.getClient();
     if (client) {
-      return await checkDDoSWithRedis(ip, currentTime, windowMs, client);
+      return await checkDDoSWithRedis(ip, client);
     }
   } catch (error) {
     // Fall back to in-memory tracking
@@ -98,8 +98,6 @@ async function checkDDoS(
  */
 async function checkDDoSWithRedis(
   ip: string,
-  _currentTime: number,
-  _windowMs: number,
   client: RedisClientType
 ): Promise<{ blocked: boolean; suspicious: boolean; count: number }> {
   const blockKey = `ddos:block:${ip}`;

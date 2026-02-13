@@ -25,7 +25,7 @@ export function activityLogger(req: Request, res: Response, next: NextFunction):
 
   // Override res.end to log response
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  res.end = function (chunk?: any, encoding?: any, callback?: any): Response {
+  res.end = function (chunk?: any, encodingOrCallback?: any, callback?: any): Response {
     const duration = Date.now() - startTime;
 
     // Log response details
@@ -51,7 +51,7 @@ export function activityLogger(req: Request, res: Response, next: NextFunction):
     }
 
     // Call the original end method
-    return originalEnd.call(this, chunk, encoding, callback);
+    return originalEnd.call(this, chunk, encodingOrCallback, callback);
   };
 
   next();
