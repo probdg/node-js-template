@@ -37,8 +37,8 @@ export interface PaginationMeta {
 }
 
 export interface PaginationParams {
-  page?: number;
-  limit?: number;
+  page: number;
+  limit: number;
 }
 
 // User types

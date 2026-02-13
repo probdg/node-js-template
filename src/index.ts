@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { config } from '../config/index.js';
 
 import { healthRouter } from './api/health.js';
+import { usersRouter } from './api/users.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { databaseService } from './services/database.js';
 import { kafkaService } from './services/kafka.js';
@@ -55,6 +56,7 @@ app.use((req, _res, next) => {
 
 // API Routes
 app.use(`/api/${config.apiVersion}/health`, healthRouter);
+app.use(`/api/${config.apiVersion}/users`, usersRouter);
 
 // 404 handler
 app.use(notFoundHandler);
