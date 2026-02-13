@@ -8,6 +8,8 @@ import { config } from '../config/index.js';
 
 import { healthRouter } from './api/health.js';
 import { usersRouter } from './api/users.js';
+import { activityLogger } from './middleware/activity-logger.js';
+import { ddosDetector } from './middleware/ddos-detector.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { databaseService } from './services/database.js';
 import { kafkaService } from './services/kafka.js';
@@ -35,6 +37,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Compression
 app.use(compression());
 
+// DDoS detection and logging
+app.use(ddosDetector);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
@@ -45,14 +50,8 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Request logging
-app.use((req, _res, next) => {
-  logger.info(`${req.method} ${req.url}`, {
-    ip: req.ip,
-    userAgent: req.headers['user-agent'],
-  });
-  next();
-});
+// Activity logging
+app.use(activityLogger);
 
 // API Routes
 app.use(`/api/${config.apiVersion}/health`, healthRouter);

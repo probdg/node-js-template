@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 
 import { HTTP_STATUS } from '@/constants';
 import { asyncHandler } from '@/middleware/error';
+import { rateLimiters } from '@/middleware/rate-limiter';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validation';
 import { userService } from '@/services/user';
 import {
@@ -27,6 +28,7 @@ const router = express.Router();
  */
 router.post(
   '/',
+  rateLimiters.write,
   validateBody(createUserSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { email, username } = req.body;
@@ -61,6 +63,7 @@ router.post(
  */
 router.get(
   '/',
+  rateLimiters.read,
   validateQuery(paginationSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { page, limit } = parsePaginationParams(req.query);
@@ -78,6 +81,7 @@ router.get(
  */
 router.get(
   '/:id',
+  rateLimiters.read,
   validateParams(idParamSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
@@ -101,6 +105,7 @@ router.get(
  */
 router.put(
   '/:id',
+  rateLimiters.write,
   validateParams(idParamSchema),
   validateBody(updateUserSchema),
   asyncHandler(async (req: Request, res: Response) => {
@@ -148,6 +153,7 @@ router.put(
  */
 router.delete(
   '/:id',
+  rateLimiters.write,
   validateParams(idParamSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
