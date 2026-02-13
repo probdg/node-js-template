@@ -8,13 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      exclude: [
-        'node_modules/**',
-        'dist/**',
-        'tests/**',
-        '**/*.config.*',
-        '**/*.d.ts',
-      ],
+      exclude: ['node_modules/**', 'dist/**', 'tests/**', '**/*.config.*', '**/*.d.ts'],
       thresholds: {
         lines: 80,
         functions: 80,
@@ -23,7 +17,7 @@ export default defineConfig({
       },
     },
     include: ['tests/**/*.{test,spec}.ts'],
-    setupFiles: [],
+    setupFiles: ['./tests/setup.ts'],
   },
   resolve: {
     alias: {
