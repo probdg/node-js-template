@@ -7,7 +7,6 @@
     "resolveJsonModule": true,
     "allowJs": false,
     "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

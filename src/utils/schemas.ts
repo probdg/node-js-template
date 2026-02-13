@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { USER_ROLES } from '@/constants';
 
 // User schemas
@@ -8,7 +9,10 @@ export const createUserSchema = z.object({
     .string()
     .min(3, 'Username must be at least 3 characters')
     .max(50, 'Username must not exceed 50 characters')
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores, and hyphens'),
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Username can only contain letters, numbers, underscores, and hyphens'
+    ),
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
@@ -27,7 +31,10 @@ export const updateUserSchema = z.object({
     .string()
     .min(3, 'Username must be at least 3 characters')
     .max(50, 'Username must not exceed 50 characters')
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores, and hyphens')
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Username can only contain letters, numbers, underscores, and hyphens'
+    )
     .optional(),
   role: z.enum([USER_ROLES.ADMIN, USER_ROLES.USER, USER_ROLES.GUEST]).optional(),
   isActive: z.boolean().optional(),

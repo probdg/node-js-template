@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
-import { USER_ROLES, ROLE_PERMISSIONS } from '@/constants';
-import { createErrorResponse } from '@/utils/response';
-import { HTTP_STATUS } from '@/constants';
-import type { UserRole, Permission } from '@/types';
+
 import type { AuthRequest } from './auth';
+
+import { USER_ROLES, ROLE_PERMISSIONS, HTTP_STATUS } from '@/constants';
+import type { UserRole, Permission } from '@/types';
+import { createErrorResponse } from '@/utils/response';
 
 /**
  * Check if user has required role
@@ -23,10 +24,7 @@ export function requireRole(...roles: UserRole[]) {
       res
         .status(HTTP_STATUS.FORBIDDEN)
         .json(
-          createErrorResponse(
-            'FORBIDDEN',
-            'You do not have permission to access this resource'
-          )
+          createErrorResponse('FORBIDDEN', 'You do not have permission to access this resource')
         );
       return;
     }
@@ -51,18 +49,13 @@ export function requirePermission(...permissions: Permission[]) {
 
     const userPermissions = ROLE_PERMISSIONS[user.role] || [];
     const hasPermission = permissions.every((permission) =>
-      userPermissions.includes(permission)
+      (userPermissions as readonly string[]).includes(permission)
     );
 
     if (!hasPermission) {
       res
         .status(HTTP_STATUS.FORBIDDEN)
-        .json(
-          createErrorResponse(
-            'FORBIDDEN',
-            'You do not have the required permissions'
-          )
-        );
+        .json(createErrorResponse('FORBIDDEN', 'You do not have the required permissions'));
       return;
     }
 
@@ -73,11 +66,7 @@ export function requirePermission(...permissions: Permission[]) {
 /**
  * Check if user is admin
  */
-export function requireAdmin(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   return requireRole(USER_ROLES.ADMIN)(req, res, next);
 }
 
@@ -93,5 +82,5 @@ export function getUserPermissions(role: UserRole): readonly Permission[] {
  */
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   const permissions = ROLE_PERMISSIONS[role] || [];
-  return permissions.includes(permission);
+  return (permissions as readonly string[]).includes(permission);
 }

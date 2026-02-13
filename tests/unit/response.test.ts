@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
+
 import {
   createApiResponse,
   createErrorResponse,
   createPaginatedResponse,
   parsePaginationParams,
   calculatePaginationMeta,
-} from '../src/utils/response';
+} from '../../src/utils/response';
 
 describe('Response Utils', () => {
   describe('createApiResponse', () => {

@@ -1,6 +1,10 @@
-import { Kafka, Producer, Consumer, EachMessagePayload, Admin } from 'kafkajs';
+import type { Producer, Consumer, EachMessagePayload, Admin } from 'kafkajs';
+import { Kafka } from 'kafkajs';
+
 import { config } from '../../config/index.js';
+
 import { logger } from './logger.js';
+
 import type { KafkaMessage } from '@/types';
 
 class KafkaService {

@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { ZodSchema } from 'zod';
-import { createErrorResponse } from '@/utils/response';
+
 import { HTTP_STATUS } from '@/constants';
+import { createErrorResponse } from '@/utils/response';
 
 /**
  * Validate request body using Zod schema
@@ -14,13 +15,11 @@ export function validateBody(schema: ZodSchema) {
       next();
     } catch (error) {
       const zodError = error as { errors?: Array<{ path: string[]; message: string }> };
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json(
-          createErrorResponse('VALIDATION_ERROR', 'Request validation failed', {
-            errors: zodError.errors,
-          })
-        );
+      res.status(HTTP_STATUS.BAD_REQUEST).json(
+        createErrorResponse('VALIDATION_ERROR', 'Request validation failed', {
+          errors: zodError.errors,
+        })
+      );
     }
   };
 }
@@ -36,13 +35,11 @@ export function validateQuery(schema: ZodSchema) {
       next();
     } catch (error) {
       const zodError = error as { errors?: Array<{ path: string[]; message: string }> };
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json(
-          createErrorResponse('VALIDATION_ERROR', 'Query validation failed', {
-            errors: zodError.errors,
-          })
-        );
+      res.status(HTTP_STATUS.BAD_REQUEST).json(
+        createErrorResponse('VALIDATION_ERROR', 'Query validation failed', {
+          errors: zodError.errors,
+        })
+      );
     }
   };
 }
@@ -58,13 +55,11 @@ export function validateParams(schema: ZodSchema) {
       next();
     } catch (error) {
       const zodError = error as { errors?: Array<{ path: string[]; message: string }> };
-      res
-        .status(HTTP_STATUS.BAD_REQUEST)
-        .json(
-          createErrorResponse('VALIDATION_ERROR', 'Params validation failed', {
-            errors: zodError.errors,
-          })
-        );
+      res.status(HTTP_STATUS.BAD_REQUEST).json(
+        createErrorResponse('VALIDATION_ERROR', 'Params validation failed', {
+          errors: zodError.errors,
+        })
+      );
     }
   };
 }

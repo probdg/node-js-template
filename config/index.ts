@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+
 import type { DbConfig, RedisConfig, KafkaConfig, MinioConfig } from '@/types';
 
 // Load environment variables

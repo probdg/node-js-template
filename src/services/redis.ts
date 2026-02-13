@@ -1,6 +1,8 @@
 import { createClient } from 'redis';
 import type { RedisClientType } from 'redis';
+
 import { config } from '../../config/index.js';
+
 import { logger } from './logger.js';
 
 class RedisService {

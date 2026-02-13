@@ -1,3 +1,4 @@
+import { HTTP_STATUS } from '@/constants';
 import type {
   ApiResponse,
   ApiError,
@@ -5,15 +6,11 @@ import type {
   PaginationMeta,
   PaginationParams,
 } from '@/types';
-import { HTTP_STATUS } from '@/constants';
 
 /**
  * Create a standardized API response
  */
-export function createApiResponse<T>(
-  data: T,
-  meta?: Partial<ResponseMeta>
-): ApiResponse<T> {
+export function createApiResponse<T>(data: T, meta?: Partial<ResponseMeta>): ApiResponse<T> {
   return {
     success: true,
     data,
@@ -74,10 +71,7 @@ export function parsePaginationParams(
   defaults = { page: 1, limit: 10 }
 ): PaginationParams {
   const page = Math.max(1, parseInt(String(query.page || defaults.page), 10));
-  const limit = Math.max(
-    1,
-    Math.min(100, parseInt(String(query.limit || defaults.limit), 10))
-  );
+  const limit = Math.max(1, Math.min(100, parseInt(String(query.limit || defaults.limit), 10)));
 
   return { page, limit };
 }

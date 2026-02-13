@@ -33,6 +33,9 @@ export default [
       security: securityPlugin,
     },
     rules: {
+      // Disable base rule as it can report incorrect errors
+      'no-unused-vars': 'off',
+      
       // TypeScript specific rules
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': [
@@ -79,6 +82,6 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js', 'coverage/**'],
+    ignores: ['dist/**', 'node_modules/**', '*.config.*', 'coverage/**'],
   },
 ];

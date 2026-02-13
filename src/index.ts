@@ -1,16 +1,18 @@
-import express from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
 import compression from 'compression';
+import cors from 'cors';
+import express from 'express';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+
 import { config } from '../config/index.js';
-import { logger, loggerStream } from './services/logger.js';
-import { databaseService } from './services/database.js';
-import { redisService } from './services/redis.js';
-import { kafkaService } from './services/kafka.js';
-import { minioService } from './services/minio.js';
-import { errorHandler, notFoundHandler } from './middleware/error.js';
+
 import { healthRouter } from './api/health.js';
+import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { databaseService } from './services/database.js';
+import { kafkaService } from './services/kafka.js';
+import { logger } from './services/logger.js';
+import { minioService } from './services/minio.js';
+import { redisService } from './services/redis.js';
 
 const app = express();
 
@@ -94,7 +96,7 @@ function setupGracefulShutdown(): void {
   signals.forEach((signal) => {
     process.on(signal, async () => {
       logger.info(`${signal} received, starting graceful shutdown...`);
-      
+
       // Stop accepting new connections
       server.close(async () => {
         logger.info('Server closed');

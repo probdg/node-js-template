@@ -1,5 +1,7 @@
 import pg from 'pg';
+
 import { config } from '../../config/index.js';
+
 import { logger } from './logger.js';
 
 const { Pool } = pg;
@@ -47,7 +49,7 @@ class DatabaseService {
     return this.pool;
   }
 
-  async query<T = unknown>(
+  async query<T extends pg.QueryResultRow = pg.QueryResultRow>(
     text: string,
     params?: unknown[]
   ): Promise<pg.QueryResult<T>> {
@@ -56,7 +58,7 @@ class DatabaseService {
       const start = Date.now();
       const result = await pool.query<T>(text, params);
       const duration = Date.now() - start;
-      
+
       logger.debug('Executed query', { text, duration, rows: result.rowCount });
       return result;
     } catch (error) {

@@ -1,19 +1,17 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+
 import { config } from '../../config/index.js';
-import { createErrorResponse } from '@/utils/response';
+
 import { HTTP_STATUS } from '@/constants';
-import type { TokenPayload, AuthenticatedRequest } from '@/types';
+import type { TokenPayload } from '@/types';
+import { createErrorResponse } from '@/utils/response';
 
 export interface AuthRequest extends Request {
   user?: TokenPayload;
 }
 
-export function authenticateToken(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(' ')[1]; // Bearer TOKEN
 
@@ -43,15 +41,15 @@ export function authenticateToken(
 }
 
 export function generateAccessToken(payload: TokenPayload): string {
-  return jwt.sign(payload, config.jwt.secret, {
+  return jwt.sign(payload as object, config.jwt.secret, {
     expiresIn: config.jwt.expiresIn,
-  });
+  } as jwt.SignOptions);
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {
-  return jwt.sign(payload, config.jwt.refreshSecret, {
+  return jwt.sign(payload as object, config.jwt.refreshSecret, {
     expiresIn: config.jwt.refreshExpiresIn,
-  });
+  } as jwt.SignOptions);
 }
 
 export function verifyRefreshToken(token: string): TokenPayload {

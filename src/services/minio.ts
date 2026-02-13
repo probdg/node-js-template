@@ -1,5 +1,7 @@
 import { Client } from 'minio';
+
 import { config } from '../../config/index.js';
+
 import { logger } from './logger.js';
 
 class MinioService {
@@ -89,11 +91,7 @@ class MinioService {
   async getFileUrl(filename: string, expirySeconds = 3600): Promise<string> {
     const client = this.getClient();
     try {
-      return await client.presignedGetObject(
-        config.minio.bucket,
-        filename,
-        expirySeconds
-      );
+      return await client.presignedGetObject(config.minio.bucket, filename, expirySeconds);
     } catch (error) {
       logger.error('Failed to generate presigned URL:', error);
       throw error;
