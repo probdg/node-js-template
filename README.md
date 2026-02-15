@@ -11,6 +11,7 @@ A production-ready Node.js/TypeScript template following industry best practices
 - **Kafka** - Event-driven messaging system for microservices
 - **MinIO** - S3-compatible object storage for file management
 - **Vault** - Secure credential storage with AES-256-GCM encryption
+- **Database Logging** - Winston-based logging with database persistence
 - **RBAC** - Complete role-based access control system
 - **JWT Authentication** - Secure token-based authentication
 - **Input Validation** - Request validation using Zod
@@ -199,6 +200,7 @@ router.post('/users', authenticateToken, requirePermission(PERMISSIONS.USER_CREA
 - **files** - File metadata
 - **sessions** - User sessions
 - **vault** - Encrypted credential storage
+- **logs** - Application logs with metadata
 
 ### Migrations
 
@@ -293,6 +295,46 @@ await vaultService.delete('api_key');
 - Automatic key/value upsert on conflict
 - Encrypted storage in PostgreSQL database
 - Health check support
+
+### Logging
+
+The template uses Winston for comprehensive logging with multiple transports including file, console, and database logging.
+
+#### Database Logging
+
+Logs are automatically persisted to the PostgreSQL database for easy querying and analysis.
+
+```typescript
+import { logService } from '@/services/log';
+
+// Query logs with filters
+const logs = await logService.getLogs({
+  level: 'error', // Filter by log level
+  startDate: new Date('2024-01-01'),
+  endDate: new Date('2024-12-31'),
+  limit: 100,
+  offset: 0,
+});
+
+// Get log statistics
+const counts = await logService.getLogCountByLevel();
+// Returns: { info: 1000, error: 50, warn: 100 }
+
+// Get a specific log entry
+const log = await logService.getLogById('log-uuid');
+
+// Clean up old logs
+const deletedCount = await logService.deleteOldLogs(new Date('2024-01-01'));
+```
+
+**Features:**
+
+- Automatic batch logging to database for performance
+- Configurable log levels (debug, info, warn, error)
+- Query logs by level, date range, and pagination
+- Log statistics and analytics
+- Automatic cleanup of old logs
+- File, console, and database transports
 
 ## 🧪 Testing
 

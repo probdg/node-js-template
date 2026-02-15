@@ -2,6 +2,8 @@ import winston from 'winston';
 
 import { config } from '../../config/index.js';
 
+import { DatabaseTransport } from './database-transport.js';
+
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
 // Custom log format
@@ -17,6 +19,11 @@ const logFormat = printf(({ level, message, timestamp, stack, ...meta }) => {
   }
 
   return msg;
+});
+
+// Create database transport instance
+export const databaseTransport = new DatabaseTransport({
+  level: config.logging.level,
 });
 
 // Create logger instance
@@ -39,6 +46,8 @@ export const logger = winston.createLogger({
       level: 'error',
       format: combine(timestamp(), logFormat),
     }),
+    // Database transport
+    databaseTransport,
   ],
 });
 

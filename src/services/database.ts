@@ -28,6 +28,10 @@ class DatabaseService {
       await client.query('SELECT NOW()');
       client.release();
 
+      // Initialize database transport with pool
+      const { databaseTransport } = await import('./logger.js');
+      databaseTransport.setPool(this.pool);
+
       logger.info('Database connected successfully');
     } catch (error) {
       logger.error('Failed to connect to database:', error);
@@ -37,6 +41,14 @@ class DatabaseService {
 
   async disconnect(): Promise<void> {
     if (this.pool) {
+      // Close database transport before disconnecting
+      try {
+        const { databaseTransport } = await import('./logger.js');
+        await databaseTransport.close();
+      } catch (error) {
+        logger.error('Failed to close database transport:', error);
+      }
+
       await this.pool.end();
       logger.info('Database disconnected');
     }
