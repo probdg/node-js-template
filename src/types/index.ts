@@ -149,3 +149,27 @@ export interface MinioConfig {
 export interface AuthenticatedRequest {
   user?: TokenPayload;
 }
+
+// Vault types
+export interface VaultConfig {
+  encryptionKey: string;
+  algorithm: string;
+}
+
+export interface VaultEntry {
+  id: string;
+  key: string;
+  encryptedValue: string;
+  iv: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateVaultEntryDto {
+  key: string;
+  value: string;
+}
+
+export interface UpdateVaultEntryDto {
+  value: string;
+}

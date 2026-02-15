@@ -162,7 +162,7 @@ describe('UserService', () => {
 
       expect(result.total).toBe(25);
       expect(result.users).toHaveLength(2);
-      expect(result.users[0].email).toBe('user1@example.com');
+      expect(result.users?.[0]?.email).toBe('user1@example.com');
       expect(databaseService.query).toHaveBeenCalledTimes(2);
     });
   });

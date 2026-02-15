@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 
-import type { DbConfig, RedisConfig, KafkaConfig, MinioConfig } from '@/types';
+import type { DbConfig, RedisConfig, KafkaConfig, MinioConfig, VaultConfig } from '@/types';
 
 // Load environment variables
 dotenv.config();
@@ -98,6 +98,15 @@ export const config = {
   cors: {
     origin: getEnv('CORS_ORIGIN', 'http://localhost:3000'),
   },
+
+  // Vault
+  vault: {
+    encryptionKey: getEnv(
+      'VAULT_ENCRYPTION_KEY',
+      'default-test-key-32-chars-long-for-testing-only'
+    ),
+    algorithm: getEnv('VAULT_ALGORITHM', 'aes-256-gcm'),
+  } as VaultConfig,
 
   // Helpers
   isDevelopment: () => config.env === 'development',

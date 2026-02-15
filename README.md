@@ -10,6 +10,7 @@ A production-ready Node.js/TypeScript template following industry best practices
 - **Redis** - High-performance caching and session management
 - **Kafka** - Event-driven messaging system for microservices
 - **MinIO** - S3-compatible object storage for file management
+- **Vault** - Secure credential storage with AES-256-GCM encryption
 - **RBAC** - Complete role-based access control system
 - **JWT Authentication** - Secure token-based authentication
 - **Input Validation** - Request validation using Zod
@@ -99,17 +100,17 @@ docker-compose down
 
 ## 📝 Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server with hot reload |
-| `npm run build` | Build production bundle |
-| `npm start` | Start production server |
-| `npm run lint` | Run ESLint and fix issues |
-| `npm run format` | Format code with Prettier |
-| `npm test` | Run tests |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:coverage` | Generate test coverage report |
-| `npm run typecheck` | Run TypeScript type checking |
+| Script                  | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `npm run dev`           | Start development server with hot reload |
+| `npm run build`         | Build production bundle                  |
+| `npm start`             | Start production server                  |
+| `npm run lint`          | Run ESLint and fix issues                |
+| `npm run format`        | Format code with Prettier                |
+| `npm test`              | Run tests                                |
+| `npm run test:watch`    | Run tests in watch mode                  |
+| `npm run test:coverage` | Generate test coverage report            |
+| `npm run typecheck`     | Run TypeScript type checking             |
 
 ## 🏗️ Project Structure
 
@@ -197,6 +198,7 @@ router.post('/users', authenticateToken, requirePermission(PERMISSIONS.USER_CREA
 - **role_permissions** - Role-permission mappings
 - **files** - File metadata
 - **sessions** - User sessions
+- **vault** - Encrypted credential storage
 
 ### Migrations
 
@@ -258,6 +260,39 @@ await minioService.uploadFile('filename.jpg', buffer, { 'Content-Type': 'image/j
 // Get presigned URL
 const url = await minioService.getFileUrl('filename.jpg');
 ```
+
+### Vault
+
+Secure credential storage with AES-256-GCM encryption for managing sensitive data.
+
+```typescript
+import { vaultService } from '@/services/vault';
+
+// Store a credential
+await vaultService.set({
+  key: 'api_key',
+  value: 'secret_api_key_12345',
+});
+
+// Retrieve a credential
+const apiKey = await vaultService.get('api_key');
+
+// Check if a credential exists
+const exists = await vaultService.exists('api_key');
+
+// List all credential keys
+const keys = await vaultService.listKeys();
+
+// Delete a credential
+await vaultService.delete('api_key');
+```
+
+**Features:**
+
+- AES-256-GCM encryption for maximum security
+- Automatic key/value upsert on conflict
+- Encrypted storage in PostgreSQL database
+- Health check support
 
 ## 🧪 Testing
 
@@ -343,6 +378,7 @@ Ensure all required environment variables are set in production:
 - Kafka brokers
 - MinIO credentials
 - JWT secrets
+- Vault encryption key (must be at least 32 characters)
 - CORS origins
 
 ## 📊 Health Checks
@@ -437,6 +473,7 @@ For issues and questions, please open an issue on GitHub.
 ## 🙏 Acknowledgments
 
 This template is based on best practices from:
+
 - [sadigitID/nuxt-template](https://github.com/sadigitID/nuxt-template)
 - Node.js community guidelines
 - SonarQube quality standards
