@@ -109,35 +109,6 @@ describe('VaultService', () => {
   });
 
   describe('get', () => {
-    it('should retrieve and decrypt a credential from the vault', async () => {
-      // First, we need to encrypt a value to get a valid encrypted format
-      const testKey = 'test_key';
-
-      // Set up the mock to return a properly encrypted value
-      // We'll mock the actual encrypted output from the service
-      const mockEncryptedData = {
-        encrypted_value: 'mock_auth_tag:mock_encrypted_value',
-        iv: '1234567890abcdef1234567890abcdef',
-      };
-
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockEncryptedData],
-        rowCount: 1,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
-
-      // Since we're mocking the database, we can't test actual decryption
-      // Just test that the method is called correctly
-      await expect(vaultService.get(testKey)).rejects.toThrow();
-
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT encrypted_value, iv FROM vault'),
-        [testKey]
-      );
-    });
-
     it('should return null when key does not exist', async () => {
       vi.mocked(databaseService.query).mockResolvedValue({
         rows: [],
@@ -150,6 +121,33 @@ describe('VaultService', () => {
       const result = await vaultService.get('non_existent_key');
 
       expect(result).toBeNull();
+    });
+
+    it('should throw error for invalid encrypted value format', async () => {
+      const testKey = 'test_key';
+
+      // Mock invalid format (missing colon separator)
+      const mockInvalidData = {
+        encrypted_value: 'invalid_format_without_colon',
+        iv: '1234567890abcdef1234567890abcdef',
+      };
+
+      vi.mocked(databaseService.query).mockResolvedValue({
+        rows: [mockInvalidData],
+        rowCount: 1,
+        command: 'SELECT',
+        oid: 0,
+        fields: [],
+      });
+
+      await expect(vaultService.get(testKey)).rejects.toThrow(
+        'Invalid encrypted value format in vault entry'
+      );
+
+      expect(databaseService.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT encrypted_value, iv FROM vault'),
+        [testKey]
+      );
     });
   });
 
@@ -265,28 +263,56 @@ describe('VaultService', () => {
   });
 
   describe('encryption/decryption', () => {
-    it('should properly encrypt and decrypt values', async () => {
+    it('should properly encrypt and decrypt values in round-trip', async () => {
       const testValue = 'my_secret_password_123';
+      let capturedEncryptedValue = '';
+      let capturedIv = '';
 
-      // Mock the set operation
-      const mockVaultEntry = {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        key: 'test_password',
-        encrypted_value: 'encrypted:data',
-        iv: 'test_iv',
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
+      // Mock the set operation to capture the encrypted values
+      vi.mocked(databaseService.query).mockImplementation(async (sql: string, params?: any[]) => {
+        if (sql.includes('INSERT INTO vault')) {
+          // Capture the encrypted value and IV
+          capturedEncryptedValue = params?.[1] || '';
+          capturedIv = params?.[2] || '';
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockVaultEntry],
-        rowCount: 1,
-        command: 'INSERT',
-        oid: 0,
-        fields: [],
+          return {
+            rows: [
+              {
+                id: '123e4567-e89b-12d3-a456-426614174000',
+                key: 'test_password',
+                encrypted_value: capturedEncryptedValue,
+                iv: capturedIv,
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            ],
+            rowCount: 1,
+            command: 'INSERT',
+            oid: 0,
+            fields: [],
+          };
+        }
+
+        if (sql.includes('SELECT encrypted_value')) {
+          // Return the captured encrypted values
+          return {
+            rows: [
+              {
+                encrypted_value: capturedEncryptedValue,
+                iv: capturedIv,
+              },
+            ],
+            rowCount: 1,
+            command: 'SELECT',
+            oid: 0,
+            fields: [],
+          };
+        }
+
+        return { rows: [], rowCount: 0, command: '', oid: 0, fields: [] };
       });
 
-      // Set the value
+      // Set the value (this will encrypt it)
       const setResult = await vaultService.set({
         key: 'test_password',
         value: testValue,
@@ -294,6 +320,53 @@ describe('VaultService', () => {
 
       expect(setResult.key).toBe('test_password');
       expect(setResult.encryptedValue).not.toBe(testValue);
+      expect(setResult.encryptedValue).toContain(':'); // Should have authTag:encryptedValue format
+
+      // Get the value (this will decrypt it)
+      const retrievedValue = await vaultService.get('test_password');
+
+      // Verify round-trip encryption/decryption works
+      expect(retrievedValue).toBe(testValue);
+    });
+
+    it('should produce different encrypted values for the same input', async () => {
+      const testValue = 'same_password';
+      const capturedValues: string[] = [];
+
+      // Mock to capture multiple encrypted values
+      vi.mocked(databaseService.query).mockImplementation(async (sql: string, params?: any[]) => {
+        if (sql.includes('INSERT INTO vault')) {
+          const encryptedValue = params?.[1] || '';
+          capturedValues.push(encryptedValue);
+
+          return {
+            rows: [
+              {
+                id: '123e4567-e89b-12d3-a456-426614174000',
+                key: `test_key_${capturedValues.length}`,
+                encrypted_value: encryptedValue,
+                iv: params?.[2] || '',
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            ],
+            rowCount: 1,
+            command: 'INSERT',
+            oid: 0,
+            fields: [],
+          };
+        }
+
+        return { rows: [], rowCount: 0, command: '', oid: 0, fields: [] };
+      });
+
+      // Encrypt the same value twice
+      await vaultService.set({ key: 'test_key_1', value: testValue });
+      await vaultService.set({ key: 'test_key_2', value: testValue });
+
+      // Encrypted values should be different due to random IV
+      expect(capturedValues).toHaveLength(2);
+      expect(capturedValues[0]).not.toBe(capturedValues[1]);
     });
   });
 });

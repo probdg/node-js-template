@@ -123,7 +123,16 @@ class VaultService {
         return null;
       }
 
+      // Validate encrypted value format
+      if (!row.encrypted_value || !row.encrypted_value.includes(':')) {
+        throw new Error('Invalid encrypted value format in vault entry');
+      }
+
       const [authTag, encryptedValue] = row.encrypted_value.split(':');
+
+      if (!authTag || !encryptedValue) {
+        throw new Error('Invalid encrypted value format in vault entry');
+      }
 
       const decryptedValue = this.decrypt(encryptedValue, row.iv, authTag);
 
