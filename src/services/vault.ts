@@ -117,11 +117,7 @@ class VaultService {
         return null;
       }
 
-      const row = result.rows[0];
-
-      if (!row) {
-        return null;
-      }
+      const row = result.rows[0]!; // Safe due to length check above
 
       // Validate encrypted value format
       if (!row.encrypted_value || !row.encrypted_value.includes(':')) {
