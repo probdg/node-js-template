@@ -1,6 +1,13 @@
 import dotenv from 'dotenv';
 
-import type { DbConfig, RedisConfig, KafkaConfig, MinioConfig, VaultConfig } from '@/types';
+import type {
+  DbConfig,
+  RedisConfig,
+  KafkaConfig,
+  MinioConfig,
+  VaultConfig,
+  UploadConfig,
+} from '@/types';
 
 // Load environment variables
 dotenv.config();
@@ -107,6 +114,16 @@ export const config = {
     ),
     algorithm: getEnv('VAULT_ALGORITHM', 'aes-256-gcm'),
   } as VaultConfig,
+
+  // Upload
+  upload: {
+    directory: getEnv('UPLOAD_DIRECTORY', 'uploads'),
+    maxFileSize: getEnvNumber('UPLOAD_MAX_FILE_SIZE', 5242880), // 5MB default
+    allowedMimeTypes: getEnv(
+      'UPLOAD_ALLOWED_MIME_TYPES',
+      'image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain'
+    ).split(','),
+  } as UploadConfig,
 
   // Helpers
   isDevelopment: () => config.env === 'development',

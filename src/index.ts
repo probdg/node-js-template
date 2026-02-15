@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { config } from '../config/index.js';
 
 import { healthRouter } from './api/health.js';
+import { uploadsRouter } from './api/uploads.js';
 import { usersRouter } from './api/users.js';
 import { activityLogger } from './middleware/activity-logger.js';
 import { ddosDetector } from './middleware/ddos-detector.js';
@@ -56,6 +57,7 @@ app.use(activityLogger);
 // API Routes
 app.use(`/api/${config.apiVersion}/health`, healthRouter);
 app.use(`/api/${config.apiVersion}/users`, usersRouter);
+app.use(`/api/${config.apiVersion}/uploads`, uploadsRouter);
 
 // 404 handler
 app.use(notFoundHandler);
