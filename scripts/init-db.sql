@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS vault (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Logs table for database logging
+CREATE TABLE IF NOT EXISTS logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    level VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL,
+    meta JSONB,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -77,6 +86,8 @@ CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token ON sessions(refresh_token);
 CREATE INDEX IF NOT EXISTS idx_vault_key ON vault(key);
+CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp DESC);
 
 -- Insert default roles
 INSERT INTO roles (name, description) VALUES
