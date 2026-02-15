@@ -87,73 +87,6 @@ router.post(
 );
 
 /**
- * GET /uploads/:filename
- * Download/retrieve a specific file
- */
-router.get(
-  '/:filename',
-  rateLimiters.read,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { filename } = req.params as { filename: string };
-
-    // Sanitize filename to prevent directory traversal
-    const sanitizedFilename = path.basename(filename);
-    const filePath = path.join(config.upload.directory, sanitizedFilename);
-
-    try {
-      // Check if file exists
-      await fs.access(filePath);
-
-      // Send file
-      res.sendFile(filePath, { root: process.cwd() });
-    } catch (error) {
-      logger.warn(`File not found: ${sanitizedFilename}`);
-      res
-        .status(HTTP_STATUS.NOT_FOUND)
-        .json(createErrorResponse('FILE_NOT_FOUND', 'File not found'));
-    }
-  })
-);
-
-/**
- * DELETE /uploads/:filename
- * Delete a specific file
- */
-router.delete(
-  '/:filename',
-  rateLimiters.write,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { filename } = req.params as { filename: string };
-
-    // Sanitize filename to prevent directory traversal
-    const sanitizedFilename = path.basename(filename);
-    const filePath = path.join(config.upload.directory, sanitizedFilename);
-
-    try {
-      // Check if file exists
-      await fs.access(filePath);
-
-      // Delete file
-      await fs.unlink(filePath);
-
-      logger.info(`File deleted successfully: ${sanitizedFilename}`);
-
-      res.status(HTTP_STATUS.OK).json(
-        createApiResponse({
-          message: 'File deleted successfully',
-          filename: sanitizedFilename,
-        })
-      );
-    } catch (error) {
-      logger.warn(`File not found: ${sanitizedFilename}`);
-      res
-        .status(HTTP_STATUS.NOT_FOUND)
-        .json(createErrorResponse('FILE_NOT_FOUND', 'File not found'));
-    }
-  })
-);
-
-/**
  * GET /uploads
  * List all uploaded files
  */
@@ -192,6 +125,73 @@ router.get(
       res
         .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
         .json(createErrorResponse('LIST_FILES_ERROR', 'Failed to list files'));
+    }
+  })
+);
+
+/**
+ * GET /uploads/:filename
+ * Download/retrieve a specific file
+ */
+router.get(
+  '/:filename',
+  rateLimiters.read,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { filename } = req.params as { filename: string };
+
+    // Sanitize filename to prevent directory traversal
+    const sanitizedFilename = path.basename(filename);
+    const filePath = path.join(config.upload.directory, sanitizedFilename);
+
+    try {
+      // Check if file exists
+      await fs.access(filePath);
+
+      // Send file using absolute path
+      res.sendFile(path.resolve(filePath));
+    } catch (error) {
+      logger.warn(`File not found: ${sanitizedFilename}`);
+      res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json(createErrorResponse('FILE_NOT_FOUND', 'File not found'));
+    }
+  })
+);
+
+/**
+ * DELETE /uploads/:filename
+ * Delete a specific file
+ */
+router.delete(
+  '/:filename',
+  rateLimiters.write,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { filename } = req.params as { filename: string };
+
+    // Sanitize filename to prevent directory traversal
+    const sanitizedFilename = path.basename(filename);
+    const filePath = path.join(config.upload.directory, sanitizedFilename);
+
+    try {
+      // Check if file exists and get stats
+      await fs.access(filePath);
+
+      // Delete file
+      await fs.unlink(filePath);
+
+      logger.info(`File deleted successfully: ${sanitizedFilename}`);
+
+      res.status(HTTP_STATUS.OK).json(
+        createApiResponse({
+          message: 'File deleted successfully',
+          filename: sanitizedFilename,
+        })
+      );
+    } catch (error) {
+      logger.warn(`Failed to delete file ${sanitizedFilename}:`, error);
+      res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json(createErrorResponse('FILE_NOT_FOUND', 'File not found or could not be deleted'));
     }
   })
 );
