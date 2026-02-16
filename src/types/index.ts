@@ -145,6 +145,13 @@ export interface MinioConfig {
   bucket: string;
 }
 
+// Upload types
+export interface UploadConfig {
+  directory: string;
+  maxFileSize: number;
+  allowedMimeTypes: string[];
+}
+
 // Request types
 export interface AuthenticatedRequest {
   user?: TokenPayload;

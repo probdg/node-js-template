@@ -47,3 +47,7 @@ temp/
 # Cache
 .cache/
 .eslintcache
+
+# Uploads (keep directory structure)
+uploads/*
+!uploads/.gitkeep
