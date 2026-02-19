@@ -16,7 +16,7 @@ vi.mock('../../src/services/logger', () => ({
 // Mock the database service
 vi.mock('../../src/services/database', () => ({
   databaseService: {
-    query: vi.fn(),
+    getClient: vi.fn(),
   },
 }));
 
@@ -24,6 +24,7 @@ vi.mock('../../src/services/database', () => ({
 vi.mock('../../config/index.js', () => ({
   config: {
     vault: {
+      enabled: true,
       encryptionKey: 'test-encryption-key-must-be-32-chars-long-minimum',
       algorithm: 'aes-256-gcm',
     },
@@ -46,13 +47,13 @@ describe('VaultService', () => {
         updated_at: new Date(),
       };
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockVaultEntry],
-        rowCount: 1,
-        command: 'INSERT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          upsert: vi.fn().mockResolvedValue(mockVaultEntry),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.set({
         key: 'api_key',
@@ -67,33 +68,37 @@ describe('VaultService', () => {
         createdAt: mockVaultEntry.created_at,
         updatedAt: mockVaultEntry.updated_at,
       });
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO vault'),
-        expect.arrayContaining([
-          'api_key',
-          expect.any(String), // encrypted value
-          expect.any(String), // iv
-        ])
-      );
+      expect(mockPrismaClient.vaultEntry.upsert).toHaveBeenCalledWith({
+        where: { key: 'api_key' },
+        update: {
+          encrypted_value: expect.any(String),
+          iv: expect.any(String),
+        },
+        create: {
+          key: 'api_key',
+          encrypted_value: expect.any(String),
+          iv: expect.any(String),
+        },
+      });
     });
 
     it('should update existing key on conflict', async () => {
       const mockVaultEntry = {
         id: '123e4567-e89b-12d3-a456-426614174000',
         key: 'api_key',
-        encrypted_value: 'new:encrypted:value',
+        encryptedValue: 'new:encrypted:value',
         iv: 'newiv123456789ab',
-        created_at: new Date(),
-        updated_at: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockVaultEntry],
-        rowCount: 1,
-        command: 'INSERT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          upsert: vi.fn().mockResolvedValue(mockVaultEntry),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.set({
         key: 'api_key',
@@ -101,26 +106,41 @@ describe('VaultService', () => {
       });
 
       expect(result.key).toBe('api_key');
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('ON CONFLICT'),
-        expect.any(Array)
-      );
+      expect(mockPrismaClient.vaultEntry.upsert).toHaveBeenCalledWith({
+        where: { key: 'api_key' },
+        update: {
+          encrypted_value: expect.any(String),
+          iv: expect.any(String),
+        },
+        create: {
+          key: 'api_key',
+          encrypted_value: expect.any(String),
+          iv: expect.any(String),
+        },
+      });
     });
   });
 
   describe('get', () => {
     it('should return null when key does not exist', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.get('non_existent_key');
 
       expect(result).toBeNull();
+      expect(mockPrismaClient.vaultEntry.findUnique).toHaveBeenCalledWith({
+        where: { key: 'non_existent_key' },
+        select: {
+          encrypted_value: true,
+          iv: true,
+        },
+      });
     });
 
     it('should throw error for invalid encrypted value format', async () => {
@@ -132,52 +152,54 @@ describe('VaultService', () => {
         iv: '1234567890abcdef1234567890abcdef',
       };
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockInvalidData],
-        rowCount: 1,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          findUnique: vi.fn().mockResolvedValue(mockInvalidData),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       await expect(vaultService.get(testKey)).rejects.toThrow(
         'Invalid encrypted value format in vault entry'
       );
 
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT encrypted_value, iv FROM vault'),
-        [testKey]
-      );
+      expect(mockPrismaClient.vaultEntry.findUnique).toHaveBeenCalledWith({
+        where: { key: testKey },
+        select: {
+          encrypted_value: true,
+          iv: true,
+        },
+      });
     });
   });
 
   describe('delete', () => {
     it('should delete a credential from the vault', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [{ id: 'deleted-id' }],
-        rowCount: 1,
-        command: 'DELETE',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.delete('api_key');
 
       expect(result).toBe(true);
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('DELETE FROM vault'),
-        ['api_key']
-      );
+      expect(mockPrismaClient.vaultEntry.deleteMany).toHaveBeenCalledWith({
+        where: { key: 'api_key' },
+      });
     });
 
     it('should return false when key does not exist', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'DELETE',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.delete('non_existent_key');
 
@@ -187,31 +209,31 @@ describe('VaultService', () => {
 
   describe('exists', () => {
     it('should return true when key exists', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [{ id: 'some-id' }],
-        rowCount: 1,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'some-id' }),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.exists('api_key');
 
       expect(result).toBe(true);
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id FROM vault'),
-        ['api_key']
-      );
+      expect(mockPrismaClient.vaultEntry.findUnique).toHaveBeenCalledWith({
+        where: { key: 'api_key' },
+        select: { id: true },
+      });
     });
 
     it('should return false when key does not exist', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.exists('non_existent_key');
 
@@ -223,30 +245,31 @@ describe('VaultService', () => {
     it('should return list of all keys in the vault', async () => {
       const mockKeys = [{ key: 'api_key' }, { key: 'db_password' }, { key: 'secret_token' }];
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: mockKeys,
-        rowCount: 3,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          findMany: vi.fn().mockResolvedValue(mockKeys),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.listKeys();
 
       expect(result).toEqual(['api_key', 'db_password', 'secret_token']);
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT key FROM vault')
-      );
+      expect(mockPrismaClient.vaultEntry.findMany).toHaveBeenCalledWith({
+        select: { key: true },
+        orderBy: { created_at: 'desc' },
+      });
     });
 
     it('should return empty array when vault is empty', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        vaultEntry: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await vaultService.listKeys();
 
@@ -269,48 +292,33 @@ describe('VaultService', () => {
       let capturedIv = '';
 
       // Mock the set operation to capture the encrypted values
-      vi.mocked(databaseService.query).mockImplementation(async (sql: string, params?: any[]) => {
-        if (sql.includes('INSERT INTO vault')) {
-          // Capture the encrypted value and IV
-          capturedEncryptedValue = params?.[1] || '';
-          capturedIv = params?.[2] || '';
+      const mockPrismaClient = {
+        vaultEntry: {
+          upsert: vi.fn().mockImplementation(async (args: any) => {
+            // Capture the encrypted value and IV
+            capturedEncryptedValue = args.create.encrypted_value || args.update.encrypted_value;
+            capturedIv = args.create.iv || args.update.iv;
 
-          return {
-            rows: [
-              {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                key: 'test_password',
-                encrypted_value: capturedEncryptedValue,
-                iv: capturedIv,
-                created_at: new Date(),
-                updated_at: new Date(),
-              },
-            ],
-            rowCount: 1,
-            command: 'INSERT',
-            oid: 0,
-            fields: [],
-          };
-        }
+            return {
+              id: '123e4567-e89b-12d3-a456-426614174000',
+              key: args.create.key || args.where.key,
+              encrypted_value: capturedEncryptedValue,
+              iv: capturedIv,
+              created_at: new Date(),
+              updated_at: new Date(),
+            };
+          }),
+          findUnique: vi.fn().mockImplementation(async () => {
+            // Return the captured encrypted values
+            return {
+              encrypted_value: capturedEncryptedValue,
+              iv: capturedIv,
+            };
+          }),
+        },
+      };
 
-        if (sql.includes('SELECT encrypted_value')) {
-          // Return the captured encrypted values
-          return {
-            rows: [
-              {
-                encrypted_value: capturedEncryptedValue,
-                iv: capturedIv,
-              },
-            ],
-            rowCount: 1,
-            command: 'SELECT',
-            oid: 0,
-            fields: [],
-          };
-        }
-
-        return { rows: [], rowCount: 0, command: '', oid: 0, fields: [] };
-      });
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       // Set the value (this will encrypt it)
       const setResult = await vaultService.set({
@@ -334,31 +342,25 @@ describe('VaultService', () => {
       const capturedValues: string[] = [];
 
       // Mock to capture multiple encrypted values
-      vi.mocked(databaseService.query).mockImplementation(async (sql: string, params?: any[]) => {
-        if (sql.includes('INSERT INTO vault')) {
-          const encryptedValue = params?.[1] || '';
-          capturedValues.push(encryptedValue);
+      const mockPrismaClient = {
+        vaultEntry: {
+          upsert: vi.fn().mockImplementation(async (args: any) => {
+            const encryptedValue = args.create.encrypted_value;
+            capturedValues.push(encryptedValue);
 
-          return {
-            rows: [
-              {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                key: `test_key_${capturedValues.length}`,
-                encrypted_value: encryptedValue,
-                iv: params?.[2] || '',
-                created_at: new Date(),
-                updated_at: new Date(),
-              },
-            ],
-            rowCount: 1,
-            command: 'INSERT',
-            oid: 0,
-            fields: [],
-          };
-        }
+            return {
+              id: '123e4567-e89b-12d3-a456-426614174000',
+              key: args.create.key,
+              encrypted_value: encryptedValue,
+              iv: args.create.iv,
+              created_at: new Date(),
+              updated_at: new Date(),
+            };
+          }),
+        },
+      };
 
-        return { rows: [], rowCount: 0, command: '', oid: 0, fields: [] };
-      });
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       // Encrypt the same value twice
       await vaultService.set({ key: 'test_key_1', value: testValue });

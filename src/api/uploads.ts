@@ -101,7 +101,8 @@ router.get(
       const fileInfoPromises = files
         .filter((file) => file !== '.gitkeep')
         .map(async (file) => {
-          const filePath = path.join(config.upload.directory, file);
+          const sanitized = path.basename(file);
+          const filePath = path.join(config.upload.directory, sanitized);
           const stats = await fs.stat(filePath);
 
           return {
@@ -149,7 +150,7 @@ router.get(
 
       // Send file using absolute path
       res.sendFile(path.resolve(filePath));
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(`File not found: ${sanitizedFilename}`);
       res
         .status(HTTP_STATUS.NOT_FOUND)
@@ -187,7 +188,7 @@ router.delete(
           filename: sanitizedFilename,
         })
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(`Failed to delete file ${sanitizedFilename}:`, error);
       res
         .status(HTTP_STATUS.NOT_FOUND)

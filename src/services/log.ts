@@ -1,11 +1,15 @@
 import { databaseService } from './database.js';
+import { Prisma } from '@prisma/client';
+
+const prisma = () => databaseService.getClient();
 
 export interface LogEntry {
   id: string;
   level: string;
   message: string;
   meta: Record<string, unknown> | null;
-  timestamp: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface LogQueryOptions {
@@ -17,7 +21,7 @@ export interface LogQueryOptions {
 }
 
 /**
- * Service for querying logs from the database
+ * Service for querying logs from the database using Prisma
  */
 class LogService {
   /**
@@ -26,78 +30,68 @@ class LogService {
   async getLogs(options: LogQueryOptions = {}): Promise<LogEntry[]> {
     const { level, startDate, endDate, limit = 100, offset = 0 } = options;
 
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    let paramIndex = 1;
+    const where: Prisma.LogWhereInput = {};
 
     if (level) {
-      conditions.push(`level = $${paramIndex}`);
-      params.push(level);
-      paramIndex++;
+      where.level = level;
     }
 
-    if (startDate) {
-      conditions.push(`timestamp >= $${paramIndex}`);
-      params.push(startDate);
-      paramIndex++;
+    if (startDate || endDate) {
+      where.created_at = {};
+      if (startDate) {
+        where.created_at.gte = startDate;
+      }
+      if (endDate) {
+        where.created_at.lte = endDate;
+      }
     }
 
-    if (endDate) {
-      conditions.push(`timestamp <= $${paramIndex}`);
-      params.push(endDate);
-      paramIndex++;
-    }
+    const logs = await prisma().log.findMany({
+      where,
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const query = `
-      SELECT id, level, message, meta, timestamp
-      FROM logs
-      ${whereClause}
-      ORDER BY timestamp DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    params.push(limit, offset);
-
-    const result = await databaseService.query<LogEntry>(query, params);
-    return result.rows;
+    return logs.map((log) => ({
+      id: log.id,
+      level: log.level,
+      message: log.message,
+      meta: log.meta as Record<string, unknown> | null,
+      createdAt: log.created_at,
+      updatedAt: log.updated_at,
+    }));
   }
 
   /**
    * Get log count by level
    */
   async getLogCountByLevel(startDate?: Date, endDate?: Date): Promise<Record<string, number>> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    let paramIndex = 1;
+    const where: Prisma.LogWhereInput = {};
 
-    if (startDate) {
-      conditions.push(`timestamp >= $${paramIndex}`);
-      params.push(startDate);
-      paramIndex++;
+    if (startDate || endDate) {
+      where.created_at = {};
+      if (startDate) {
+        where.created_at.gte = startDate;
+      }
+      if (endDate) {
+        where.created_at.lte = endDate;
+      }
     }
 
-    if (endDate) {
-      conditions.push(`timestamp <= $${paramIndex}`);
-      params.push(endDate);
-      paramIndex++;
-    }
+    const result = await prisma().log.groupBy({
+      by: ['level'],
+      where,
+      _count: {
+        level: true,
+      },
+    });
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const query = `
-      SELECT level, COUNT(*)::int as count
-      FROM logs
-      ${whereClause}
-      GROUP BY level
-    `;
-
-    const result = await databaseService.query<{ level: string; count: number }>(query, params);
-
-    return result.rows.reduce(
-      (acc, row) => {
-        acc[row.level] = row.count;
+    return result.reduce(
+      (acc: Record<string, number>, item) => {
+        acc[item.level] = item._count.level;
         return acc;
       },
       {} as Record<string, number>
@@ -108,18 +102,39 @@ class LogService {
    * Delete logs older than the specified date
    */
   async deleteOldLogs(beforeDate: Date): Promise<number> {
-    const query = 'DELETE FROM logs WHERE timestamp < $1';
-    const result = await databaseService.query(query, [beforeDate]);
-    return result.rowCount || 0;
+    const result = await prisma().log.deleteMany({
+      where: {
+        created_at: {
+          lt: beforeDate,
+        },
+      },
+    });
+
+    return result.count;
   }
 
   /**
    * Get a single log entry by ID
    */
   async getLogById(id: string): Promise<LogEntry | null> {
-    const query = 'SELECT id, level, message, meta, timestamp FROM logs WHERE id = $1';
-    const result = await databaseService.query<LogEntry>(query, [id]);
-    return result.rows[0] || null;
+    const log = await prisma().log.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!log) {
+      return null;
+    }
+
+    return {
+      id: log.id,
+      level: log.level,
+      message: log.message,
+      meta: log.meta as Record<string, unknown> | null,
+      createdAt: log.created_at,
+      updatedAt: log.updated_at,
+    };
   }
 }
 

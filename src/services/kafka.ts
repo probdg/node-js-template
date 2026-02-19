@@ -12,8 +12,15 @@ class KafkaService {
   private producer: Producer | null = null;
   private consumer: Consumer | null = null;
   private admin: Admin | null = null;
+  private isConnected: boolean = false;
 
   async connect(): Promise<void> {
+    // Skip connection if Kafka is disabled
+    if (!config.kafka.enabled) {
+      logger.info('Kafka is disabled, skipping connection');
+      return;
+    }
+
     try {
       this.kafka = new Kafka({
         clientId: config.kafka.clientId,
@@ -32,9 +39,11 @@ class KafkaService {
       await this.consumer.connect();
       await this.admin.connect();
 
+      this.isConnected = true;
       logger.info('Kafka connected successfully');
     } catch (error) {
       logger.error('Failed to connect to Kafka:', error);
+      this.isConnected = false;
       throw error;
     }
   }
@@ -49,25 +58,35 @@ class KafkaService {
     if (this.admin) {
       await this.admin.disconnect();
     }
+    this.isConnected = false;
     logger.info('Kafka disconnected');
   }
 
   getProducer(): Producer {
-    if (!this.producer) {
+    if (!config.kafka.enabled) {
+      throw new Error('Kafka is disabled');
+    }
+    if (!this.producer || !this.isConnected) {
       throw new Error('Kafka producer not connected');
     }
     return this.producer;
   }
 
   getConsumer(): Consumer {
-    if (!this.consumer) {
+    if (!config.kafka.enabled) {
+      throw new Error('Kafka is disabled');
+    }
+    if (!this.consumer || !this.isConnected) {
       throw new Error('Kafka consumer not connected');
     }
     return this.consumer;
   }
 
   getAdmin(): Admin {
-    if (!this.admin) {
+    if (!config.kafka.enabled) {
+      throw new Error('Kafka is disabled');
+    }
+    if (!this.admin || !this.isConnected) {
       throw new Error('Kafka admin not connected');
     }
     return this.admin;
@@ -133,6 +152,11 @@ class KafkaService {
   }
 
   async healthCheck(): Promise<boolean> {
+    // If Kafka is disabled, consider it healthy (not required)
+    if (!config.kafka.enabled) {
+      return true;
+    }
+
     try {
       const admin = this.getAdmin();
       await admin.listTopics();

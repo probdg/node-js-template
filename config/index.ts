@@ -14,10 +14,10 @@ dotenv.config();
 
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
-  if (!value && !defaultValue) {
+  if (value === undefined && defaultValue === undefined) {
     throw new Error(`Environment variable ${key} is not defined`);
   }
-  return value || defaultValue || '';
+  return value !== undefined ? value : (defaultValue ?? '');
 }
 
 function getEnvNumber(key: string, defaultValue: number): number {
@@ -33,22 +33,26 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 export const config = {
   // Application
   env: getEnv('NODE_ENV', 'development'),
+  host: getEnv('HOST', 'localhost'),
   port: getEnvNumber('PORT', 3000),
   apiVersion: getEnv('API_VERSION', 'v1'),
 
   // Database
   database: {
+    enabled: getEnvBoolean('DB_ENABLED', true),
     host: getEnv('DB_HOST', 'localhost'),
     port: getEnvNumber('DB_PORT', 5432),
     database: getEnv('DB_NAME', 'nodeapp'),
     user: getEnv('DB_USER', 'postgres'),
     password: getEnv('DB_PASSWORD', 'postgres'),
+    type: getEnv('DB_TYPE', 'postgres'),
     min: getEnvNumber('DB_POOL_MIN', 2),
     max: getEnvNumber('DB_POOL_MAX', 10),
   } as DbConfig,
 
   // Redis
   redis: {
+    enabled: getEnvBoolean('REDIS_ENABLED', true),
     host: getEnv('REDIS_HOST', 'localhost'),
     port: getEnvNumber('REDIS_PORT', 6379),
     password: getEnv('REDIS_PASSWORD', ''),
@@ -58,6 +62,7 @@ export const config = {
 
   // Kafka
   kafka: {
+    enabled: getEnvBoolean('KAFKA_ENABLED', true),
     brokers: getEnv('KAFKA_BROKERS', 'localhost:9092').split(','),
     clientId: getEnv('KAFKA_CLIENT_ID', 'node-app'),
     groupId: getEnv('KAFKA_GROUP_ID', 'node-app-group'),
@@ -65,6 +70,7 @@ export const config = {
 
   // MinIO
   minio: {
+    enabled: getEnvBoolean('MINIO_ENABLED', true),
     endPoint: getEnv('MINIO_ENDPOINT', 'localhost'),
     port: getEnvNumber('MINIO_PORT', 9000),
     useSSL: getEnvBoolean('MINIO_USE_SSL', false),
@@ -75,9 +81,9 @@ export const config = {
 
   // JWT
   jwt: {
-    secret: getEnv('JWT_SECRET'),
+    secret: getEnv('JWT_SECRET', 'change-this-jwt-secret-in-production'),
     expiresIn: getEnv('JWT_EXPIRES_IN', '1d'),
-    refreshSecret: getEnv('JWT_REFRESH_SECRET'),
+    refreshSecret: getEnv('JWT_REFRESH_SECRET', 'change-this-jwt-refresh-secret-in-production'),
     refreshExpiresIn: getEnv('JWT_REFRESH_EXPIRES_IN', '7d'),
   },
 
@@ -89,6 +95,7 @@ export const config = {
 
   // DDoS Detection
   ddos: {
+    enabled: getEnvBoolean('DDOS_ENABLED', true),
     windowSeconds: getEnvNumber('DDOS_WINDOW_SECONDS', 60),
     requestThreshold: getEnvNumber('DDOS_REQUEST_THRESHOLD', 100),
     blockThreshold: getEnvNumber('DDOS_BLOCK_THRESHOLD', 200),
@@ -108,6 +115,7 @@ export const config = {
 
   // Vault
   vault: {
+    enabled: getEnvBoolean('VAULT_ENABLED', true),
     encryptionKey: getEnv(
       'VAULT_ENCRYPTION_KEY',
       'default-test-key-32-chars-long-for-testing-only'

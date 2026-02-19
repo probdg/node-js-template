@@ -7,8 +7,15 @@ import { logger } from './logger.js';
 
 class RedisService {
   private client: RedisClientType | null = null;
+  private isConnected: boolean = false;
 
   async connect(): Promise<void> {
+    // Skip connection if Redis is disabled
+    if (!config.redis.enabled) {
+      logger.info('Redis is disabled, skipping connection');
+      return;
+    }
+
     try {
       this.client = createClient({
         socket: {
@@ -35,11 +42,14 @@ class RedisService {
 
       this.client.on('ready', () => {
         logger.info('Redis connected successfully');
+        this.isConnected = true;
       });
 
       await this.client.connect();
+      this.isConnected = true;
     } catch (error) {
       logger.error('Failed to connect to Redis:', error);
+      this.isConnected = false;
       throw error;
     }
   }
@@ -47,12 +57,16 @@ class RedisService {
   async disconnect(): Promise<void> {
     if (this.client) {
       await this.client.quit();
+      this.isConnected = false;
       logger.info('Redis disconnected');
     }
   }
 
   getClient(): RedisClientType {
-    if (!this.client) {
+    if (!config.redis.enabled) {
+      throw new Error('Redis is disabled');
+    }
+    if (!this.client || !this.isConnected) {
       throw new Error('Redis not connected');
     }
     return this.client;
@@ -105,6 +119,11 @@ class RedisService {
   }
 
   async healthCheck(): Promise<boolean> {
+    // If Redis is disabled, consider it healthy (not required)
+    if (!config.redis.enabled) {
+      return true;
+    }
+
     try {
       const client = this.getClient();
       const result = await client.ping();

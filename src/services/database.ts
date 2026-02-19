@@ -1,38 +1,28 @@
-import pg from 'pg';
+import { PrismaClient } from '@prisma/client';
 
 import { config } from '../../config/index.js';
 
 import { logger } from './logger.js';
 
-const { Pool } = pg;
-
 class DatabaseService {
-  private pool: pg.Pool | null = null;
+  private prisma: PrismaClient | null = null;
 
   async connect(): Promise<void> {
     try {
-      this.pool = new Pool({
-        host: config.database.host,
-        port: config.database.port,
-        database: config.database.database,
-        user: config.database.user,
-        password: config.database.password,
-        min: config.database.min,
-        max: config.database.max,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-      });
+      // Create Prisma Client with database URL from config
+      const databaseUrl = config.database.type === 'mysql'
+        ? `mysql://${config.database.user}:${config.database.password}@${config.database.host}:${config.database.port}/${config.database.database}`
+        : `postgresql://${config.database.user}:${config.database.password}@${config.database.host}:${config.database.port}/${config.database.database}`;
+
+      // Override the datasource URL with environment variable or direct URL
+      process.env.DATABASE_URL = databaseUrl;
+
+      this.prisma = new PrismaClient();
 
       // Test connection
-      const client = await this.pool.connect();
-      await client.query('SELECT NOW()');
-      client.release();
+      await this.prisma.$connect();
 
-      // Initialize database transport with pool
-      const { databaseTransport } = await import('./logger.js');
-      databaseTransport.setPool(this.pool);
-
-      logger.info('Database connected successfully');
+      logger.info('Database connected successfully via Prisma');
     } catch (error) {
       logger.error('Failed to connect to database:', error);
       throw error;
@@ -40,66 +30,26 @@ class DatabaseService {
   }
 
   async disconnect(): Promise<void> {
-    if (this.pool) {
-      // Close database transport before disconnecting
-      try {
-        const { databaseTransport } = await import('./logger.js');
-        await databaseTransport.close();
-      } catch (error) {
-        logger.error('Failed to close database transport:', error);
-      }
-
-      await this.pool.end();
+    if (this.prisma) {
+      await this.prisma.$disconnect();
       logger.info('Database disconnected');
     }
   }
 
-  getPool(): pg.Pool {
-    if (!this.pool) {
+  getClient(): PrismaClient {
+    if (!this.prisma) {
       throw new Error('Database not connected');
     }
-    return this.pool;
-  }
-
-  async query<T extends pg.QueryResultRow = pg.QueryResultRow>(
-    text: string,
-    params?: unknown[]
-  ): Promise<pg.QueryResult<T>> {
-    const pool = this.getPool();
-    try {
-      const start = Date.now();
-      const result = await pool.query<T>(text, params);
-      const duration = Date.now() - start;
-
-      logger.debug('Executed query', { text, duration, rows: result.rowCount });
-      return result;
-    } catch (error) {
-      logger.error('Query error:', { text, error });
-      throw error;
-    }
-  }
-
-  async transaction<T>(callback: (client: pg.PoolClient) => Promise<T>): Promise<T> {
-    const pool = this.getPool();
-    const client = await pool.connect();
-
-    try {
-      await client.query('BEGIN');
-      const result = await callback(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.prisma;
   }
 
   async healthCheck(): Promise<boolean> {
     try {
-      const result = await this.query('SELECT 1');
-      return result.rowCount !== null && result.rowCount > 0;
+      if (this.prisma) {
+        await this.prisma.$queryRaw`SELECT 1`;
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }

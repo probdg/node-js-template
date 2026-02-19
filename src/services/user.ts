@@ -5,30 +5,29 @@ import { logger } from './logger.js';
 
 import type { CreateUserDto, UpdateUserDto, User } from '@/types';
 
-interface UserRow {
-  id: string;
-  email: string;
-  username: string;
-  password_hash: string;
-  role: string;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
+const prisma = () => databaseService.getClient();
 
 class UserService {
   /**
-   * Map database row to User object
+   * Map Prisma User to User object
    */
-  private mapRowToUser(row: UserRow): User {
+  private mapPrismaUserToUser(prismaUser: {
+    id: string;
+    email: string;
+    username: string;
+    role: string;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+  }): User {
     return {
-      id: row.id,
-      email: row.email,
-      username: row.username,
-      role: row.role as User['role'],
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: prismaUser.id,
+      email: prismaUser.email,
+      username: prismaUser.username,
+      role: prismaUser.role as User['role'],
+      isActive: prismaUser.is_active,
+      createdAt: prismaUser.created_at,
+      updatedAt: prismaUser.updated_at,
     };
   }
 
@@ -40,25 +39,17 @@ class UserService {
       // Hash password
       const passwordHash = await bcrypt.hash(userData.password, 10);
 
-      const query = `
-        INSERT INTO users (email, username, password_hash, role)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, email, username, role, is_active, created_at, updated_at
-      `;
+      const user = await prisma().user.create({
+        data: {
+          email: userData.email,
+          username: userData.username,
+          password_hash: passwordHash,
+          role: userData.role || 'user',
+        },
+      });
 
-      const result = await databaseService.query<UserRow>(query, [
-        userData.email,
-        userData.username,
-        passwordHash,
-        userData.role || 'user',
-      ]);
-
-      if (!result.rows[0]) {
-        throw new Error('Failed to create user');
-      }
-
-      logger.info('User created successfully', { userId: result.rows[0].id });
-      return this.mapRowToUser(result.rows[0]);
+      logger.info('User created successfully', { userId: user.id });
+      return this.mapPrismaUserToUser(user);
     } catch (error) {
       logger.error('Error creating user:', error);
       throw error;
@@ -70,14 +61,11 @@ class UserService {
    */
   async getUserById(id: string): Promise<User | null> {
     try {
-      const query = `
-        SELECT id, email, username, role, is_active, created_at, updated_at
-        FROM users
-        WHERE id = $1
-      `;
+      const user = await prisma().user.findUnique({
+        where: { id },
+      });
 
-      const result = await databaseService.query<UserRow>(query, [id]);
-      return result.rows[0] ? this.mapRowToUser(result.rows[0]) : null;
+      return user ? this.mapPrismaUserToUser(user) : null;
     } catch (error) {
       logger.error('Error fetching user by ID:', error);
       throw error;
@@ -85,29 +73,57 @@ class UserService {
   }
 
   /**
+   * Get user by email
+   */
+  async getUserByEmail(email: string): Promise<User | null> {
+    try {
+      const user = await prisma().user.findUnique({
+        where: { email },
+      });
+
+      return user ? this.mapPrismaUserToUser(user) : null;
+    } catch (error) {
+      logger.error('Error fetching user by email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user by username
+   */
+  async getUserByUsername(username: string): Promise<User | null> {
+    try {
+      const user = await prisma().user.findUnique({
+        where: { username },
+      });
+
+      return user ? this.mapPrismaUserToUser(user) : null;
+    } catch (error) {
+      logger.error('Error fetching user by username:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all users with pagination
    */
-  async getAllUsers(page = 1, limit = 10): Promise<{ users: User[]; total: number }> {
+  async getAllUsers(page: number, limit: number): Promise<{ users: User[]; total: number }> {
     try {
-      const offset = (page - 1) * limit;
+      const skip = (page - 1) * limit;
 
-      // Get total count
-      const countQuery = 'SELECT COUNT(*) as count FROM users';
-      const countResult = await databaseService.query<{ count: string }>(countQuery);
-      const total = parseInt(countResult.rows[0]?.count || '0', 10);
+      const [users, total] = await Promise.all([
+        prisma().user.findMany({
+          skip,
+          take: limit,
+          orderBy: { created_at: 'desc' },
+        }),
+        prisma().user.count(),
+      ]);
 
-      // Get users with pagination
-      const query = `
-        SELECT id, email, username, role, is_active, created_at, updated_at
-        FROM users
-        ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
-      `;
-
-      const result = await databaseService.query<UserRow>(query, [limit, offset]);
-      const users = result.rows.map((row) => this.mapRowToUser(row));
-
-      return { users, total };
+      return {
+        users: users.map((user) => this.mapPrismaUserToUser(user)),
+        total,
+      };
     } catch (error) {
       logger.error('Error fetching users:', error);
       throw error;
@@ -115,79 +131,41 @@ class UserService {
   }
 
   /**
-   * Update user by ID
+   * Update user
    */
-  async updateUser(id: string, userData: UpdateUserDto): Promise<User | null> {
+  async updateUser(id: string, updateData: UpdateUserDto): Promise<User | null> {
     try {
-      const updates: string[] = [];
-      const values: (string | boolean)[] = [];
-      let paramIndex = 1;
+      const user = await prisma().user.update({
+        where: { id },
+        data: {
+          ...(updateData.email && { email: updateData.email }),
+          ...(updateData.username && { username: updateData.username }),
+          ...(updateData.role && { role: updateData.role }),
+          ...(updateData.isActive !== undefined && { is_active: updateData.isActive }),
+        },
+      });
 
-      if (userData.email !== undefined) {
-        updates.push(`email = $${paramIndex++}`);
-        values.push(userData.email);
-      }
-
-      if (userData.username !== undefined) {
-        updates.push(`username = $${paramIndex++}`);
-        values.push(userData.username);
-      }
-
-      if (userData.role !== undefined) {
-        updates.push(`role = $${paramIndex++}`);
-        values.push(userData.role);
-      }
-
-      if (userData.isActive !== undefined) {
-        updates.push(`is_active = $${paramIndex++}`);
-        values.push(userData.isActive);
-      }
-
-      if (updates.length === 0) {
-        // No updates to make, return current user
-        return this.getUserById(id);
-      }
-
-      values.push(id);
-
-      const query = `
-        UPDATE users
-        SET ${updates.join(', ')}
-        WHERE id = $${paramIndex}
-        RETURNING id, email, username, role, is_active, created_at, updated_at
-      `;
-
-      const result = await databaseService.query<UserRow>(query, values);
-
-      if (!result.rows[0]) {
-        return null;
-      }
-
-      logger.info('User updated successfully', { userId: id });
-      return this.mapRowToUser(result.rows[0]);
+      return this.mapPrismaUserToUser(user);
     } catch (error) {
       logger.error('Error updating user:', error);
-      throw error;
+      return null;
     }
   }
 
   /**
-   * Delete user by ID
+   * Delete user
    */
   async deleteUser(id: string): Promise<boolean> {
     try {
-      const query = 'DELETE FROM users WHERE id = $1 RETURNING id';
-      const result = await databaseService.query(query, [id]);
-
-      if (result.rowCount === 0) {
-        return false;
-      }
+      await prisma().user.delete({
+        where: { id },
+      });
 
       logger.info('User deleted successfully', { userId: id });
       return true;
     } catch (error) {
       logger.error('Error deleting user:', error);
-      throw error;
+      return false;
     }
   }
 
@@ -196,12 +174,15 @@ class UserService {
    */
   async userExistsByEmail(email: string): Promise<boolean> {
     try {
-      const query = 'SELECT id FROM users WHERE email = $1';
-      const result = await databaseService.query(query, [email]);
-      return (result.rowCount ?? 0) > 0;
+      const user = await prisma().user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      return !!user;
     } catch (error) {
       logger.error('Error checking user existence by email:', error);
-      throw error;
+      return false;
     }
   }
 
@@ -210,12 +191,36 @@ class UserService {
    */
   async userExistsByUsername(username: string): Promise<boolean> {
     try {
-      const query = 'SELECT id FROM users WHERE username = $1';
-      const result = await databaseService.query(query, [username]);
-      return (result.rowCount ?? 0) > 0;
+      const user = await prisma().user.findUnique({
+        where: { username },
+        select: { id: true },
+      });
+
+      return !!user;
     } catch (error) {
       logger.error('Error checking user existence by username:', error);
-      throw error;
+      return false;
+    }
+  }
+
+  /**
+   * Verify user password
+   */
+  async verifyPassword(user: User, password: string): Promise<boolean> {
+    try {
+      const userWithPassword = await prisma().user.findUnique({
+        where: { id: user.id },
+        select: { password_hash: true },
+      });
+
+      if (!userWithPassword) {
+        return false;
+      }
+
+      return bcrypt.compare(password, userWithPassword.password_hash);
+    } catch (error) {
+      logger.error('Error verifying password:', error);
+      return false;
     }
   }
 }

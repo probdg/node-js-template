@@ -1,12 +1,13 @@
-import type pg from 'pg';
+import type { Prisma } from '@prisma/client';
 import type TransportStream from 'winston-transport';
 import Transport from 'winston-transport';
 
+import { databaseService } from './database.js';
+
 /**
- * Custom Winston transport for logging to PostgreSQL database
+ * Custom Winston transport for logging to PostgreSQL database using Prisma
  */
 export class DatabaseTransport extends Transport {
-  private pool: pg.Pool | null = null;
   private buffer: Array<{ level: string; message: string; meta: Record<string, unknown> }> = [];
   private flushInterval: ReturnType<typeof setInterval> | null = null;
   private readonly batchSize = 10;
@@ -14,10 +15,7 @@ export class DatabaseTransport extends Transport {
 
   constructor(opts?: TransportStream.TransportStreamOptions) {
     super(opts);
-  }
-
-  setPool(pool: pg.Pool): void {
-    this.pool = pool;
+    // Start the automatic flush interval
     this.startFlushInterval();
   }
 
@@ -54,17 +52,15 @@ export class DatabaseTransport extends Transport {
   }
 
   private startFlushInterval(): void {
-    if (!this.flushInterval) {
-      this.flushInterval = setInterval(() => {
-        this.flush().catch((error) => {
-          this.emit('error', error);
-        });
-      }, this.flushIntervalMs);
-    }
+    this.flushInterval ??= setInterval(() => {
+      this.flush().catch((error: unknown) => {
+        this.emit('error', error);
+      });
+    }, this.flushIntervalMs);
   }
 
   private async flush(): Promise<void> {
-    if (this.buffer.length === 0 || !this.pool) {
+    if (this.buffer.length === 0) {
       return;
     }
 
@@ -72,22 +68,16 @@ export class DatabaseTransport extends Transport {
     this.buffer = [];
 
     try {
-      const values: string[] = [];
-      const params: unknown[] = [];
-      let paramIndex = 1;
+      const prisma = databaseService.getClient();
 
-      logsToInsert.forEach((log) => {
-        values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2})`);
-        params.push(log.level, log.message, JSON.stringify(log.meta));
-        paramIndex += 3;
+      // Use createMany for better performance with multiple inserts
+      await prisma.log.createMany({
+        data: logsToInsert.map((log) => ({
+          level: log.level,
+          message: log.message,
+          meta: log.meta as Prisma.InputJsonValue,
+        })),
       });
-
-      const query = `
-        INSERT INTO logs (level, message, meta)
-        VALUES ${values.join(', ')}
-      `;
-
-      await this.pool.query(query, params);
     } catch (error) {
       // Re-add failed logs to buffer for retry
       this.buffer.unshift(...logsToInsert);
@@ -95,13 +85,15 @@ export class DatabaseTransport extends Transport {
     }
   }
 
-  async close(): Promise<void> {
+  close(): void {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
       this.flushInterval = null;
     }
 
     // Flush remaining logs
-    await this.flush();
+    this.flush().catch((error: unknown) => {
+      this.emit('error', error);
+    });
   }
 }

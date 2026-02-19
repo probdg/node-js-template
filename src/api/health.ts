@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 
 import { HTTP_STATUS } from '@/constants';
 import { asyncHandler } from '@/middleware/error';
+import { config } from '../../config/index.js';
 import { databaseService } from '@/services/database';
 import { kafkaService } from '@/services/kafka';
 import { minioService } from '@/services/minio';
@@ -35,10 +36,10 @@ router.get(
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       services: {
-        database: await databaseService.healthCheck(),
-        redis: await redisService.healthCheck(),
-        kafka: await kafkaService.healthCheck(),
-        minio: await minioService.healthCheck(),
+        database: config.database.enabled ? await databaseService.healthCheck() : true,
+        redis: config.redis.enabled ? await redisService.healthCheck() : true,
+        kafka: config.kafka.enabled ? await kafkaService.healthCheck() : true,
+        minio: config.minio.enabled ? await minioService.healthCheck() : true,
       },
     };
 
@@ -85,8 +86,8 @@ router.get('/live', (_req: Request, res: Response) => {
 router.get(
   '/ready',
   asyncHandler(async (_req: Request, res: Response) => {
-    const dbHealthy = await databaseService.healthCheck();
-    const redisHealthy = await redisService.healthCheck();
+    const dbHealthy = config.database.enabled ? await databaseService.healthCheck() : true;
+    const redisHealthy = config.redis.enabled ? await redisService.healthCheck() : true;
 
     const ready = dbHealthy && redisHealthy;
 

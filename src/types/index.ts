@@ -103,6 +103,8 @@ export interface UploadFileDto {
 
 // Database types
 export interface DbConfig {
+  enabled: boolean;
+  type?: string;
   host: string;
   port: number;
   database: string;
@@ -114,6 +116,7 @@ export interface DbConfig {
 
 // Redis types
 export interface RedisConfig {
+  enabled: boolean;
   host: string;
   port: number;
   password?: string;
@@ -123,6 +126,7 @@ export interface RedisConfig {
 
 // Kafka types
 export interface KafkaConfig {
+  enabled: boolean;
   brokers: string[];
   clientId: string;
   groupId: string;
@@ -137,6 +141,7 @@ export interface KafkaMessage<T = unknown> {
 
 // MinIO types
 export interface MinioConfig {
+  enabled: boolean;
   endPoint: string;
   port: number;
   useSSL: boolean;
@@ -159,6 +164,7 @@ export interface AuthenticatedRequest {
 
 // Vault types
 export interface VaultConfig {
+  enabled: boolean;
   encryptionKey: string;
   algorithm: string;
 }
@@ -179,4 +185,73 @@ export interface CreateVaultEntryDto {
 
 export interface UpdateVaultEntryDto {
   value: string;
+}
+
+// Post types (WordPress-style)
+export type PostStatus = 'publish' | 'draft' | 'private' | 'pending' | 'future';
+export type PostType = 'post' | 'page' | 'attachment';
+export type CommentStatus = 'open' | 'closed';
+export type PingStatus = 'open' | 'closed';
+
+export interface Post {
+  id: string;
+  title: string;
+  content: string;
+  excerpt: string | null;
+  status: PostStatus;
+  type: PostType;
+  authorId: string;
+  slug: string;
+  commentStatus: CommentStatus;
+  pingStatus: PingStatus;
+  featuredMedia: string | null;
+  parentId: string | null;
+  menuOrder: number;
+  commentCount: number;
+  views: number;
+  publishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreatePostDto {
+  title: string;
+  content: string;
+  excerpt?: string | null;
+  status?: PostStatus;
+  type?: PostType;
+  authorId: string;
+  slug?: string;
+  commentStatus?: CommentStatus;
+  pingStatus?: PingStatus;
+  featuredMedia?: string | null;
+  parentId?: string | null;
+  menuOrder?: number;
+  publishedAt?: Date | null;
+}
+
+export interface UpdatePostDto {
+  title?: string;
+  content?: string;
+  excerpt?: string | null;
+  status?: PostStatus;
+  type?: PostType;
+  slug?: string;
+  commentStatus?: CommentStatus;
+  pingStatus?: PingStatus;
+  featuredMedia?: string | null;
+  parentId?: string | null;
+  menuOrder?: number;
+  publishedAt?: Date | null;
+}
+
+export interface PostQueryParams {
+  page?: number;
+  limit?: number;
+  status?: PostStatus;
+  type?: PostType;
+  authorId?: string;
+  search?: string;
+  orderBy?: 'date' | 'title' | 'modified' | 'views' | 'comment_count';
+  order?: 'asc' | 'desc';
 }

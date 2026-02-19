@@ -51,3 +51,5 @@ temp/
 # Uploads (keep directory structure)
 uploads/*
 !uploads/.gitkeep
+
+/generated/prisma

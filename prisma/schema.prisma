@@ -1,0 +1,78 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User model
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String   @unique
+  password_hash String   @default("")
+  role          String   @default("user")
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Post model (WordPress-style)
+model Post {
+  id               String    @id @default(uuid()) @map("ID")
+  post_title       String
+  post_content     String    @db.Text
+  post_excerpt     String?   @db.Text
+  post_status      String    @default("draft")
+  post_type        String    @default("post")
+  post_author      String
+  post_name        String
+  comment_status   String    @default("open")
+  ping_status      String    @default("open")
+  guid             String?
+  post_parent      String?   @default("")
+  menu_order       Int       @default(0)
+  comment_count    Int       @default(0)
+  views            Int       @default(0)
+  post_date        DateTime? @default(now())
+  created_at       DateTime  @default(now())
+  post_modified    DateTime  @updatedAt
+
+  @@index([post_author])
+  @@index([post_status])
+  @@index([post_type])
+  @@index([post_date])
+  @@map("wpny_posts")
+}
+
+// Vault model for encrypted credentials
+model VaultEntry {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  encrypted_value String
+  iv              String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@map("vault")
+}
+
+// Log model
+model Log {
+  id         String   @id @default(uuid())
+  level      String
+  message    String   @db.Text
+  meta       Json?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([level])
+  @@index([created_at])
+  @@map("logs")
+}

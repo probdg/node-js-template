@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
@@ -6,7 +8,9 @@ import helmet from 'helmet';
 
 import { config } from '../config/index.js';
 
+import authRouter from './api/auth.js';
 import { healthRouter } from './api/health.js';
+import { postsRouter } from './api/posts.js';
 import { uploadsRouter } from './api/uploads.js';
 import { usersRouter } from './api/users.js';
 import { activityLogger } from './middleware/activity-logger.js';
@@ -17,6 +21,7 @@ import { kafkaService } from './services/kafka.js';
 import { logger } from './services/logger.js';
 import { minioService } from './services/minio.js';
 import { redisService } from './services/redis.js';
+import { vaultService } from './services/vault.js';
 
 const app = express();
 
@@ -56,7 +61,9 @@ app.use(activityLogger);
 
 // API Routes
 app.use(`/api/${config.apiVersion}/health`, healthRouter);
+app.use(`/api/${config.apiVersion}/auth`, authRouter);
 app.use(`/api/${config.apiVersion}/users`, usersRouter);
+app.use(`/api/${config.apiVersion}/posts`, postsRouter);
 app.use(`/api/${config.apiVersion}/uploads`, uploadsRouter);
 
 // 404 handler
@@ -67,29 +74,65 @@ app.use(errorHandler);
 
 // Initialize services
 async function initializeServices(): Promise<void> {
-  try {
-    await databaseService.connect();
-    await redisService.connect();
-    await kafkaService.connect();
-    await minioService.connect();
-    logger.info('All services initialized successfully');
-  } catch (error) {
-    logger.error('Failed to initialize services:', error);
-    throw error;
-  }
+  const services = [
+    {
+      name: 'Database',
+      enabled: config.database.enabled,
+      connect: () => databaseService.connect(),
+    },
+    { name: 'Redis', enabled: config.redis.enabled, connect: () => redisService.connect() },
+    { name: 'Kafka', enabled: config.kafka.enabled, connect: () => kafkaService.connect() },
+    { name: 'MinIO', enabled: config.minio.enabled, connect: () => minioService.connect() },
+    { name: 'Vault', enabled: config.vault.enabled, connect: () => vaultService.connect() },
+  ];
+
+  const results = await Promise.allSettled(
+    services
+      .filter((service) => service.enabled)
+      .map(async (service) => {
+        try {
+          await service.connect();
+          return { service: service.name, success: true };
+        } catch (error) {
+          logger.warn(`${service.name} not available, continuing without it`, { error });
+          return { service: service.name, success: false, error };
+        }
+      })
+  );
+
+  const successful = results.filter((r) => r.status === 'fulfilled' && r.value.success).length;
+  const total = services.filter((s) => s.enabled).length;
+
+  logger.info(`Services initialized: ${successful}/${total} successful`);
 }
 
 // Cleanup services
 async function cleanupServices(): Promise<void> {
-  try {
-    await databaseService.disconnect();
-    await redisService.disconnect();
-    await kafkaService.disconnect();
-    await minioService.disconnect();
-    logger.info('All services cleaned up successfully');
-  } catch (error) {
-    logger.error('Failed to cleanup services:', error);
-  }
+  const services = [
+    {
+      name: 'Database',
+      enabled: config.database.enabled,
+      disconnect: () => databaseService.disconnect(),
+    },
+    { name: 'Redis', enabled: config.redis.enabled, disconnect: () => redisService.disconnect() },
+    { name: 'Kafka', enabled: config.kafka.enabled, disconnect: () => kafkaService.disconnect() },
+    { name: 'MinIO', enabled: config.minio.enabled, disconnect: () => minioService.disconnect() },
+    { name: 'Vault', enabled: config.vault.enabled, disconnect: () => vaultService.disconnect() },
+  ];
+
+  await Promise.allSettled(
+    services
+      .filter((service) => service.enabled)
+      .map(async (service) => {
+        try {
+          await service.disconnect();
+        } catch (error) {
+          logger.error(`Failed to cleanup ${service.name}:`, error);
+        }
+      })
+  );
+
+  logger.info('All services cleaned up');
 }
 
 // Graceful shutdown
@@ -123,7 +166,7 @@ async function startServer(): Promise<void> {
   try {
     await initializeServices();
 
-    server = app.listen(config.port, () => {
+    server = app.listen(config.port, config.host, () => {
       logger.info(`Server running on port ${config.port} in ${config.env} mode`);
       logger.info(`API Version: ${config.apiVersion}`);
     });
@@ -148,8 +191,13 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start the application
-if (import.meta.url === `file://${process.argv[1]}`) {
-  startServer();
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isMain) {
+  startServer().catch((error) => {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  });
 }
 
 export { app, startServer };

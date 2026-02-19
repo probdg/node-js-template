@@ -7,18 +7,41 @@ import { logger } from './logger.js';
 
 import type { VaultEntry, CreateVaultEntryDto } from '@/types';
 
+const prisma = () => databaseService.getClient();
+
 class VaultService {
   private algorithm: string;
   private encryptionKey: Buffer;
 
   constructor() {
+    // Validate encryption key even when disabled to ensure config is correct
     this.algorithm = config.vault.algorithm;
-    // Ensure the key is exactly 32 bytes for AES-256
     const key = config.vault.encryptionKey;
     if (key.length < 32) {
       throw new Error('Vault encryption key must be at least 32 characters');
     }
     this.encryptionKey = Buffer.from(key.slice(0, 32), 'utf-8');
+  }
+
+  /**
+   * Initialize vault service (currently no connection needed)
+   */
+  async connect(): Promise<void> {
+    if (!config.vault.enabled) {
+      logger.info('Vault is disabled, skipping initialization');
+      return;
+    }
+    logger.info('Vault initialized successfully');
+  }
+
+  /**
+   * Cleanup vault service
+   */
+  async disconnect(): Promise<void> {
+    if (!config.vault.enabled) {
+      return;
+    }
+    logger.info('Vault disconnected');
   }
 
   /**
@@ -66,36 +89,39 @@ class VaultService {
    * Store a credential in the vault
    */
   async set(data: CreateVaultEntryDto): Promise<VaultEntry> {
+    if (!config.vault.enabled) {
+      throw new Error('Vault is disabled');
+    }
+
     try {
       const { encryptedValue, iv, authTag } = this.encrypt(data.value);
 
       // Store encrypted value with IV and auth tag
       const combinedEncrypted = `${authTag}:${encryptedValue}`;
 
-      const result = await databaseService.query(
-        `INSERT INTO vault (key, encrypted_value, iv, created_at, updated_at)
-         VALUES ($1, $2, $3, NOW(), NOW())
-         ON CONFLICT (key) 
-         DO UPDATE SET encrypted_value = $2, iv = $3, updated_at = NOW()
-         RETURNING id, key, encrypted_value, iv, created_at, updated_at`,
-        [data.key, combinedEncrypted, iv]
-      );
-
-      const row = result.rows[0];
-
-      if (!row) {
-        throw new Error('Failed to store vault entry');
-      }
+      // Use upsert to handle both insert and update cases
+      const result = await prisma().vaultEntry.upsert({
+        where: { key: data.key },
+        update: {
+          encrypted_value: combinedEncrypted,
+          iv: iv,
+        },
+        create: {
+          key: data.key,
+          encrypted_value: combinedEncrypted,
+          iv: iv,
+        },
+      });
 
       logger.info(`Vault entry set for key: ${data.key}`);
 
       return {
-        id: row.id,
-        key: row.key,
-        encryptedValue: row.encrypted_value,
-        iv: row.iv,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+        id: result.id,
+        key: result.key,
+        encryptedValue: result.encrypted_value,
+        iv: result.iv,
+        createdAt: result.created_at,
+        updatedAt: result.updated_at,
       };
     } catch (error) {
       logger.error('Failed to set vault entry:', error);
@@ -107,30 +133,35 @@ class VaultService {
    * Retrieve and decrypt a credential from the vault
    */
   async get(key: string): Promise<string | null> {
-    try {
-      const result = await databaseService.query(
-        'SELECT encrypted_value, iv FROM vault WHERE key = $1',
-        [key]
-      );
+    if (!config.vault.enabled) {
+      throw new Error('Vault is disabled');
+    }
 
-      if (result.rows.length === 0) {
+    try {
+      const result = await prisma().vaultEntry.findUnique({
+        where: { key },
+        select: {
+          encrypted_value: true,
+          iv: true,
+        },
+      });
+
+      if (!result) {
         return null;
       }
 
-      const row = result.rows[0]!; // Safe due to length check above
-
       // Validate encrypted value format
-      if (!row.encrypted_value || !row.encrypted_value.includes(':')) {
+      if (!result.encrypted_value?.includes(':')) {
         throw new Error('Invalid encrypted value format in vault entry');
       }
 
-      const [authTag, encryptedValue] = row.encrypted_value.split(':');
+      const [authTag, encryptedValue] = result.encrypted_value.split(':');
 
       if (!authTag || !encryptedValue) {
         throw new Error('Invalid encrypted value format in vault entry');
       }
 
-      const decryptedValue = this.decrypt(encryptedValue, row.iv, authTag);
+      const decryptedValue = this.decrypt(encryptedValue, result.iv, authTag);
 
       return decryptedValue;
     } catch (error) {
@@ -143,12 +174,16 @@ class VaultService {
    * Delete a credential from the vault
    */
   async delete(key: string): Promise<boolean> {
-    try {
-      const result = await databaseService.query('DELETE FROM vault WHERE key = $1 RETURNING id', [
-        key,
-      ]);
+    if (!config.vault.enabled) {
+      throw new Error('Vault is disabled');
+    }
 
-      const deleted = result.rowCount !== null && result.rowCount > 0;
+    try {
+      const result = await prisma().vaultEntry.deleteMany({
+        where: { key },
+      });
+
+      const deleted = result.count > 0;
 
       if (deleted) {
         logger.info(`Vault entry deleted for key: ${key}`);
@@ -165,10 +200,17 @@ class VaultService {
    * Check if a key exists in the vault
    */
   async exists(key: string): Promise<boolean> {
-    try {
-      const result = await databaseService.query('SELECT id FROM vault WHERE key = $1', [key]);
+    if (!config.vault.enabled) {
+      throw new Error('Vault is disabled');
+    }
 
-      return result.rows.length > 0;
+    try {
+      const result = await prisma().vaultEntry.findUnique({
+        where: { key },
+        select: { id: true },
+      });
+
+      return result !== null;
     } catch (error) {
       logger.error(`Failed to check vault entry existence for key: ${key}`, error);
       throw error;
@@ -179,10 +221,17 @@ class VaultService {
    * List all keys in the vault (without values)
    */
   async listKeys(): Promise<string[]> {
-    try {
-      const result = await databaseService.query('SELECT key FROM vault ORDER BY created_at DESC');
+    if (!config.vault.enabled) {
+      throw new Error('Vault is disabled');
+    }
 
-      return result.rows.map((row) => row.key);
+    try {
+      const results = await prisma().vaultEntry.findMany({
+        select: { key: true },
+        orderBy: { created_at: 'desc' },
+      });
+
+      return results.map((result) => result.key);
     } catch (error) {
       logger.error('Failed to list vault keys:', error);
       throw error;
@@ -193,6 +242,11 @@ class VaultService {
    * Health check for vault service
    */
   async healthCheck(): Promise<boolean> {
+    // If vault is disabled, consider it healthy (not required)
+    if (!config.vault.enabled) {
+      return true;
+    }
+
     try {
       // Try to encrypt and decrypt a test value
       const testValue = 'health-check-test';

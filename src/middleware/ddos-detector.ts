@@ -1,19 +1,19 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { RedisClientType } from 'redis';
 
+import { config } from '../../config/index.js';
 import { logger } from '@/services/logger';
-import { redisService } from '@/services/redis';
 
 // Configuration for DDoS detection
 const DDOS_CONFIG = {
+  enabled: config.ddos.enabled,
   // Time window in seconds to track requests
-  windowSeconds: 60,
+  windowSeconds: config.ddos.windowSeconds,
   // Threshold for requests per IP in the time window to consider as potential DDoS
-  requestThreshold: 100,
+  requestThreshold: config.ddos.requestThreshold,
   // Threshold for requests per IP in the time window to block
-  blockThreshold: 200,
+  blockThreshold: config.ddos.blockThreshold,
   // Time to block an IP in seconds
-  blockDuration: 300, // 5 minutes
+  blockDuration: config.ddos.blockDuration,
 };
 
 // In-memory fallback if Redis is not available
@@ -24,111 +24,53 @@ const requestTracker = new Map<string, { count: number; firstRequest: number; bl
  * Tracks request patterns and logs suspicious activity
  */
 export function ddosDetector(req: Request, res: Response, next: NextFunction): void {
+  // Skip DDoS detection if disabled
+  if (!DDOS_CONFIG.enabled) {
+    return next();
+  }
+
   const clientIp = req.ip || 'unknown';
   const currentTime = Date.now();
   const windowMs = DDOS_CONFIG.windowSeconds * 1000;
 
-  // Check if using Redis or in-memory tracking
-  checkDDoS(clientIp, currentTime, windowMs)
-    .then((result) => {
-      if (result.blocked) {
-        logger.error('DDoS: Request blocked', {
-          ip: clientIp,
-          url: req.url,
-          method: req.method,
-          requestCount: result.count,
-          userAgent: req.headers['user-agent'],
-          timestamp: new Date().toISOString(),
-        });
+  // Use synchronous in-memory tracking for better performance
+  const result = checkDDoSInMemory(clientIp, currentTime, windowMs);
 
-        res.status(429).json({
-          status: 'error',
-          code: 'DDOS_DETECTED',
-          message: 'Too many requests. You have been temporarily blocked.',
-        });
-        return;
-      }
-
-      if (result.suspicious) {
-        logger.warn('DDoS: Suspicious activity detected', {
-          ip: clientIp,
-          url: req.url,
-          method: req.method,
-          requestCount: result.count,
-          threshold: DDOS_CONFIG.requestThreshold,
-          userAgent: req.headers['user-agent'],
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      next();
-    })
-    .catch((error) => {
-      // If DDoS check fails, log error and allow request
-      logger.error('DDoS detection error:', error);
-      next();
+  if (result.blocked) {
+    logger.error('DDoS: Request blocked', {
+      ip: clientIp,
+      url: req.url,
+      method: req.method,
+      requestCount: result.count,
+      userAgent: req.headers['user-agent'],
+      timestamp: new Date().toISOString(),
     });
+
+    res.status(429).json({
+      status: 'error',
+      code: 'DDOS_DETECTED',
+      message: 'Too many requests. You have been temporarily blocked.',
+    });
+    return;
+  }
+
+  if (result.suspicious) {
+    logger.warn('DDoS: Suspicious activity detected', {
+      ip: clientIp,
+      url: req.url,
+      method: req.method,
+      requestCount: result.count,
+      threshold: DDOS_CONFIG.requestThreshold,
+      userAgent: req.headers['user-agent'],
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  next();
 }
 
 /**
- * Check if IP should be blocked or flagged for suspicious activity
- */
-async function checkDDoS(
-  ip: string,
-  currentTime: number,
-  windowMs: number
-): Promise<{ blocked: boolean; suspicious: boolean; count: number }> {
-  try {
-    // Try to use Redis for distributed tracking
-    const client = await redisService.getClient();
-    if (client) {
-      return await checkDDoSWithRedis(ip, client);
-    }
-  } catch (error) {
-    // Fall back to in-memory tracking
-    logger.debug('Redis not available for DDoS detection, using in-memory tracking');
-  }
-
-  // In-memory fallback
-  return checkDDoSInMemory(ip, currentTime, windowMs);
-}
-
-/**
- * Check DDoS using Redis
- */
-async function checkDDoSWithRedis(
-  ip: string,
-  client: RedisClientType
-): Promise<{ blocked: boolean; suspicious: boolean; count: number }> {
-  const blockKey = `ddos:block:${ip}`;
-  const countKey = `ddos:count:${ip}`;
-
-  // Check if IP is blocked
-  const isBlocked = await client.get(blockKey);
-  if (isBlocked) {
-    return { blocked: true, suspicious: false, count: 0 };
-  }
-
-  // Increment request count
-  const count = await client.incr(countKey);
-
-  // Set expiry on first request
-  if (count === 1) {
-    await client.expire(countKey, DDOS_CONFIG.windowSeconds);
-  }
-
-  // Check if threshold is exceeded
-  if (count >= DDOS_CONFIG.blockThreshold) {
-    await client.setEx(blockKey, DDOS_CONFIG.blockDuration, '1');
-    return { blocked: true, suspicious: false, count };
-  }
-
-  const suspicious = count >= DDOS_CONFIG.requestThreshold;
-  return { blocked: false, suspicious, count };
-}
-
-/**
- * Check DDoS using in-memory tracking (fallback)
+ * Check DDoS using in-memory tracking
  */
 function checkDDoSInMemory(
   ip: string,

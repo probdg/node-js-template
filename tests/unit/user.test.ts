@@ -8,7 +8,7 @@ import type { CreateUserDto, UpdateUserDto } from '../../src/types';
 // Mock the database service
 vi.mock('../../src/services/database', () => ({
   databaseService: {
-    query: vi.fn(),
+    getClient: vi.fn(),
   },
 }));
 
@@ -43,13 +43,13 @@ describe('UserService', () => {
         updated_at: new Date(),
       };
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockUser],
-        rowCount: 1,
-        command: 'INSERT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          create: vi.fn().mockResolvedValue(mockUser),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.createUser(userData);
 
@@ -62,7 +62,15 @@ describe('UserService', () => {
         createdAt: mockUser.created_at,
         updatedAt: mockUser.updated_at,
       });
-      expect(databaseService.query).toHaveBeenCalledTimes(1);
+      expect(mockPrismaClient.user.create).toHaveBeenCalledTimes(1);
+      expect(mockPrismaClient.user.create).toHaveBeenCalledWith({
+        data: {
+          email: userData.email,
+          username: userData.username,
+          password_hash: 'hashed_password',
+          role: userData.role,
+        },
+      });
     });
   });
 
@@ -78,13 +86,13 @@ describe('UserService', () => {
         updated_at: new Date(),
       };
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockUser],
-        rowCount: 1,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          findUnique: vi.fn().mockResolvedValue(mockUser),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.getUserById(mockUser.id);
 
@@ -97,19 +105,19 @@ describe('UserService', () => {
         createdAt: mockUser.created_at,
         updatedAt: mockUser.updated_at,
       });
-      expect(databaseService.query).toHaveBeenCalledWith(expect.stringContaining('SELECT'), [
-        mockUser.id,
-      ]);
+      expect(mockPrismaClient.user.findUnique).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+      });
     });
 
     it('should return null when user not found', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.getUserById('non-existent-id');
 
@@ -140,30 +148,26 @@ describe('UserService', () => {
         },
       ];
 
-      // Mock count query
-      vi.mocked(databaseService.query)
-        .mockResolvedValueOnce({
-          rows: [{ count: '25' }],
-          rowCount: 1,
-          command: 'SELECT',
-          oid: 0,
-          fields: [],
-        })
-        // Mock users query
-        .mockResolvedValueOnce({
-          rows: mockUsers,
-          rowCount: 2,
-          command: 'SELECT',
-          oid: 0,
-          fields: [],
-        });
+      const mockPrismaClient = {
+        user: {
+          findMany: vi.fn().mockResolvedValue(mockUsers),
+          count: vi.fn().mockResolvedValue(25),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.getAllUsers(1, 10);
 
       expect(result.total).toBe(25);
       expect(result.users).toHaveLength(2);
       expect(result.users?.[0]?.email).toBe('user1@example.com');
-      expect(databaseService.query).toHaveBeenCalledTimes(2);
+      expect(mockPrismaClient.user.findMany).toHaveBeenCalledWith({
+        skip: 0,
+        take: 10,
+        orderBy: { created_at: 'desc' },
+      });
+      expect(mockPrismaClient.user.count).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -185,33 +189,36 @@ describe('UserService', () => {
         updated_at: new Date(),
       };
 
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [mockUpdatedUser],
-        rowCount: 1,
-        command: 'UPDATE',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          update: vi.fn().mockResolvedValue(mockUpdatedUser),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.updateUser(userId, updateData);
 
       expect(result).toBeDefined();
       expect(result?.email).toBe(updateData.email);
       expect(result?.username).toBe(updateData.username);
-      expect(databaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE'),
-        expect.any(Array)
-      );
+      expect(mockPrismaClient.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: {
+          email: updateData.email,
+          username: updateData.username,
+        },
+      });
     });
 
     it('should return null when user not found', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'UPDATE',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          update: vi.fn().mockRejectedValue(new Error('Record not found')),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.updateUser('non-existent-id', { email: 'test@example.com' });
 
@@ -221,30 +228,30 @@ describe('UserService', () => {
 
   describe('deleteUser', () => {
     it('should delete user successfully', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [{ id: 'deleted-id' }],
-        rowCount: 1,
-        command: 'DELETE',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          delete: vi.fn().mockResolvedValue({ id: 'deleted-id' }),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.deleteUser('deleted-id');
 
       expect(result).toBe(true);
-      expect(databaseService.query).toHaveBeenCalledWith(expect.stringContaining('DELETE'), [
-        'deleted-id',
-      ]);
+      expect(mockPrismaClient.user.delete).toHaveBeenCalledWith({
+        where: { id: 'deleted-id' },
+      });
     });
 
     it('should return false when user not found', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'DELETE',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          delete: vi.fn().mockRejectedValue(new Error('Record not found')),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.deleteUser('non-existent-id');
 
@@ -254,27 +261,31 @@ describe('UserService', () => {
 
   describe('userExistsByEmail', () => {
     it('should return true when user exists', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [{ id: 'some-id' }],
-        rowCount: 1,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'some-id' }),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.userExistsByEmail('test@example.com');
 
       expect(result).toBe(true);
+      expect(mockPrismaClient.user.findUnique).toHaveBeenCalledWith({
+        where: { email: 'test@example.com' },
+        select: { id: true },
+      });
     });
 
     it('should return false when user does not exist', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.userExistsByEmail('nonexistent@example.com');
 
@@ -284,27 +295,31 @@ describe('UserService', () => {
 
   describe('userExistsByUsername', () => {
     it('should return true when user exists', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [{ id: 'some-id' }],
-        rowCount: 1,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'some-id' }),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.userExistsByUsername('testuser');
 
       expect(result).toBe(true);
+      expect(mockPrismaClient.user.findUnique).toHaveBeenCalledWith({
+        where: { username: 'testuser' },
+        select: { id: true },
+      });
     });
 
     it('should return false when user does not exist', async () => {
-      vi.mocked(databaseService.query).mockResolvedValue({
-        rows: [],
-        rowCount: 0,
-        command: 'SELECT',
-        oid: 0,
-        fields: [],
-      });
+      const mockPrismaClient = {
+        user: {
+          findUnique: vi.fn().mockResolvedValue(null),
+        },
+      };
+
+      vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
       const result = await userService.userExistsByUsername('nonexistentuser');
 

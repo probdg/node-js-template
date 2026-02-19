@@ -6,8 +6,15 @@ import { logger } from './logger.js';
 
 class MinioService {
   private client: Client | null = null;
+  private isConnected: boolean = false;
 
   async connect(): Promise<void> {
+    // Skip connection if MinIO is disabled
+    if (!config.minio.enabled) {
+      logger.info('MinIO is disabled, skipping connection');
+      return;
+    }
+
     try {
       this.client = new Client({
         endPoint: config.minio.endPoint,
@@ -24,9 +31,11 @@ class MinioService {
         logger.info(`MinIO bucket created: ${config.minio.bucket}`);
       }
 
+      this.isConnected = true;
       logger.info('MinIO connected successfully');
     } catch (error) {
       logger.error('Failed to connect to MinIO:', error);
+      this.isConnected = false;
       throw error;
     }
   }
@@ -34,11 +43,15 @@ class MinioService {
   async disconnect(): Promise<void> {
     // MinIO client doesn't have a disconnect method
     this.client = null;
+    this.isConnected = false;
     logger.info('MinIO disconnected');
   }
 
   getClient(): Client {
-    if (!this.client) {
+    if (!config.minio.enabled) {
+      throw new Error('MinIO is disabled');
+    }
+    if (!this.client || !this.isConnected) {
       throw new Error('MinIO not connected');
     }
     return this.client;
@@ -127,6 +140,11 @@ class MinioService {
   }
 
   async healthCheck(): Promise<boolean> {
+    // If MinIO is disabled, consider it healthy (not required)
+    if (!config.minio.enabled) {
+      return true;
+    }
+
     try {
       const client = this.getClient();
       await client.bucketExists(config.minio.bucket);
