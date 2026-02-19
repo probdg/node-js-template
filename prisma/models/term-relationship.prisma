@@ -1,0 +1,7 @@
+model TermRelationship {
+  object_id       Int
+  term_taxonomy_id Int
+  term_order      Int
+
+  @@map("wpny_term_relationships")
+}

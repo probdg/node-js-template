@@ -1,9 +1,10 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 
+import { config } from '../../config/index.js';
+
 import { HTTP_STATUS } from '@/constants';
 import { asyncHandler } from '@/middleware/error';
-import { config } from '../../config/index.js';
 import { databaseService } from '@/services/database';
 import { kafkaService } from '@/services/kafka';
 import { minioService } from '@/services/minio';

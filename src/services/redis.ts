@@ -62,6 +62,10 @@ class RedisService {
     }
   }
 
+  isEnabled(): boolean {
+    return config.redis.enabled && this.isConnected;
+  }
+
   getClient(): RedisClientType {
     if (!config.redis.enabled) {
       throw new Error('Redis is disabled');
@@ -111,6 +115,14 @@ class RedisService {
   async keys(pattern: string): Promise<string[]> {
     const client = this.getClient();
     return await client.keys(pattern);
+  }
+
+  async delPattern(pattern: string): Promise<void> {
+    const keys = await this.keys(pattern);
+    if (keys.length > 0) {
+      const client = this.getClient();
+      await client.del(keys);
+    }
   }
 
   async flushAll(): Promise<void> {

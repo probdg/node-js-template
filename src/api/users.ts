@@ -1,7 +1,15 @@
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 
 import { HTTP_STATUS } from '@/constants';
+import type {
+  AuthRequest} from '@/middleware/authorization';
+import {
+  authenticateToken,
+  requirePermission,
+  requireRole,
+  requireOwnershipOrAdmin,
+} from '@/middleware/authorization';
 import { asyncHandler } from '@/middleware/error';
 import { rateLimiters } from '@/middleware/rate-limiter';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validation';
@@ -24,13 +32,15 @@ const router = express.Router();
 
 /**
  * POST /users
- * Create a new user
+ * Create a new user (requires admin role)
  */
 router.post(
   '/',
   rateLimiters.write,
+  authenticateToken,
+  requireRole('admin'),
   validateBody(createUserSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { email, username } = req.body;
 
     // Check if user already exists
@@ -59,13 +69,15 @@ router.post(
 
 /**
  * GET /users
- * Get all users with pagination
+ * Get all users with pagination (requires authentication)
  */
 router.get(
   '/',
   rateLimiters.read,
+  authenticateToken,
+  requirePermission('user:list'),
   validateQuery(paginationSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { page, limit } = parsePaginationParams(req.query);
 
     const { users, total } = await userService.getAllUsers(page, limit);
@@ -77,13 +89,15 @@ router.get(
 
 /**
  * GET /users/:id
- * Get user by ID
+ * Get user by ID (requires authentication)
  */
 router.get(
   '/:id',
   rateLimiters.read,
+  authenticateToken,
+  requirePermission('user:read'),
   validateParams(idParamSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params as { id: string };
 
     const user = await userService.getUserById(id);
@@ -101,14 +115,16 @@ router.get(
 
 /**
  * PUT /users/:id
- * Update user by ID
+ * Update user by ID (requires authentication and ownership or admin)
  */
 router.put(
   '/:id',
   rateLimiters.write,
+  authenticateToken,
+  requireOwnershipOrAdmin((req) => req.params?.id),
   validateParams(idParamSchema),
   validateBody(updateUserSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params as { id: string };
 
     // Check if user exists
@@ -149,13 +165,15 @@ router.put(
 
 /**
  * DELETE /users/:id
- * Delete user by ID
+ * Delete user by ID (requires admin role)
  */
 router.delete(
   '/:id',
   rateLimiters.write,
+  authenticateToken,
+  requireRole('admin'),
   validateParams(idParamSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params as { id: string };
 
     const deleted = await userService.deleteUser(id);

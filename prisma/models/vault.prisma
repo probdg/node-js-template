@@ -1,0 +1,11 @@
+// Vault model for encrypted credentials
+model VaultEntry {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  encrypted_value String
+  iv              String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@map("vault")
+}

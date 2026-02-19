@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 import express from 'express';
 import type { Request, Response } from 'express';
@@ -7,6 +7,7 @@ import type { Request, Response } from 'express';
 import { config } from '../../config/index.js';
 
 import { HTTP_STATUS } from '@/constants';
+import { authenticateToken, requirePermission } from '@/middleware/authorization';
 import { asyncHandler } from '@/middleware/error';
 import { rateLimiters } from '@/middleware/rate-limiter';
 import { uploadSingle, uploadMultiple } from '@/middleware/upload';
@@ -17,11 +18,13 @@ const router = express.Router();
 
 /**
  * POST /uploads/single
- * Upload a single file
+ * Upload a single file (requires authentication)
  */
 router.post(
   '/single',
   rateLimiters.write,
+  authenticateToken,
+  requirePermission('file:upload'),
   uploadSingle('file'),
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) {
@@ -51,11 +54,13 @@ router.post(
 
 /**
  * POST /uploads/multiple
- * Upload multiple files
+ * Upload multiple files (requires authentication)
  */
 router.post(
   '/multiple',
   rateLimiters.write,
+  authenticateToken,
+  requirePermission('file:upload'),
   uploadMultiple('files', 10),
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
@@ -88,21 +93,39 @@ router.post(
 
 /**
  * GET /uploads
- * List all uploaded files
+ * List all uploaded files (requires authentication)
  */
 router.get(
   '/',
   rateLimiters.read,
+  authenticateToken,
+  requirePermission('file:read'),
   asyncHandler(async (_req: Request, res: Response) => {
     try {
-      const files = await fs.readdir(config.upload.directory);
+      const uploadDir = path.resolve(config.upload.directory);
+      // Validate the directory path is safe
+      if (!uploadDir || typeof uploadDir !== 'string') {
+        throw new Error('Invalid upload directory configuration');
+      }
+      // Ensure uploadDir matches the expected configuration
+      const expectedDir = path.resolve(config.upload.directory);
+      if (uploadDir !== expectedDir) {
+        throw new Error('Invalid upload directory path');
+      }
+      const files: string[] = await fs.readdir(uploadDir as string);
 
       // Filter out .gitkeep and get file stats
       const fileInfoPromises = files
         .filter((file) => file !== '.gitkeep')
         .map(async (file) => {
           const sanitized = path.basename(file);
-          const filePath = path.join(config.upload.directory, sanitized);
+          const filePath = path.resolve(path.join(uploadDir, sanitized));
+
+          // Verify the resolved path is within the upload directory
+          if (!filePath.startsWith(uploadDir)) {
+            throw new Error('Invalid file path');
+          }
+
           const stats = await fs.stat(filePath);
 
           return {
@@ -132,11 +155,13 @@ router.get(
 
 /**
  * GET /uploads/:filename
- * Download/retrieve a specific file
+ * Download/retrieve a specific file (requires authentication)
  */
 router.get(
   '/:filename',
   rateLimiters.read,
+  authenticateToken,
+  requirePermission('file:read'),
   asyncHandler(async (req: Request, res: Response) => {
     const { filename } = req.params as { filename: string };
 
@@ -151,7 +176,8 @@ router.get(
       // Send file using absolute path
       res.sendFile(path.resolve(filePath));
     } catch (error: unknown) {
-      logger.warn(`File not found: ${sanitizedFilename}`);
+      logger.error(`Failed to retrieve file ${sanitizedFilename}:`, error);
+      logger.warn(`File not found: ${sanitizedFilename} `);
       res
         .status(HTTP_STATUS.NOT_FOUND)
         .json(createErrorResponse('FILE_NOT_FOUND', 'File not found'));
@@ -161,24 +187,45 @@ router.get(
 
 /**
  * DELETE /uploads/:filename
- * Delete a specific file
+ * Delete a specific file (requires authentication)
  */
 router.delete(
   '/:filename',
   rateLimiters.write,
+  authenticateToken,
+  requirePermission('file:delete'),
   asyncHandler(async (req: Request, res: Response) => {
     const { filename } = req.params as { filename: string };
 
     // Sanitize filename to prevent directory traversal
     const sanitizedFilename = path.basename(filename);
+
+    // Validate that sanitization didn't change the filename
+    if (sanitizedFilename !== filename) {
+      res
+        .status(HTTP_STATUS.BAD_REQUEST)
+        .json(createErrorResponse('INVALID_FILENAME', 'Invalid filename provided'));
+      return;
+    }
+
     const filePath = path.join(config.upload.directory, sanitizedFilename);
 
     try {
       // Check if file exists and get stats
       await fs.access(filePath);
 
+      // Verify the resolved path is within the upload directory
+      const resolvedPath = path.resolve(filePath);
+      const resolvedUploadDir = path.resolve(config.upload.directory);
+      if (!resolvedPath.startsWith(resolvedUploadDir)) {
+        res
+          .status(HTTP_STATUS.BAD_REQUEST)
+          .json(createErrorResponse('INVALID_FILENAME', 'Invalid filename provided'));
+        return;
+      }
+
       // Delete file
-      await fs.unlink(filePath);
+      await fs.unlink(resolvedPath);
 
       logger.info(`File deleted successfully: ${sanitizedFilename}`);
 

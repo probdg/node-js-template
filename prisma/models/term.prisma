@@ -1,0 +1,8 @@
+model Term {
+    termId    Int     @id @map("term_id")
+    name      String  @map("name")
+    slug      String  @map("slug")
+    termGroup Int     @map("term_group")
+
+    @@map("wpny_terms")
+}

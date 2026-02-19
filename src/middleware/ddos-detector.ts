@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 
 import { config } from '../../config/index.js';
+
 import { logger } from '@/services/logger';
 
 // Configuration for DDoS detection

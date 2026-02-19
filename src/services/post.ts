@@ -10,7 +10,8 @@ class PostService {
    * Map Prisma Post model to domain Post object
    */
   private mapPrismaPostToPost(prismaPost: {
-    id: string;
+    id: number;
+    uuid: string;
     post_title: string;
     post_content: string;
     post_excerpt: string | null;
@@ -24,13 +25,13 @@ class PostService {
     post_parent: string | null;
     menu_order: number;
     comment_count: number;
-    views: number;
     post_date: Date | null;
     created_at: Date;
     post_modified: Date;
   }): Post {
     return {
       id: prismaPost.id,
+      uuid: prismaPost.uuid,
       title: prismaPost.post_title,
       content: prismaPost.post_content,
       excerpt: prismaPost.post_excerpt,
@@ -44,7 +45,6 @@ class PostService {
       parentId: prismaPost.post_parent,
       menuOrder: prismaPost.menu_order,
       commentCount: prismaPost.comment_count,
-      views: prismaPost.views,
       publishedAt: prismaPost.post_date,
       createdAt: prismaPost.created_at,
       updatedAt: prismaPost.post_modified,
@@ -124,7 +124,7 @@ class PostService {
   /**
    * Get post by ID
    */
-  async getPostById(id: string): Promise<Post | null> {
+  async getPostById(id: number): Promise<Post | null> {
     try {
       const post = await prisma().post.findUnique({
         where: { id },
@@ -176,7 +176,10 @@ class PostService {
         post_status?: string;
         post_type?: string;
         post_author?: string;
-        OR?: Array<{ post_title?: { contains: string; mode: 'insensitive' }; post_content?: { contains: string; mode: 'insensitive' } }>;
+        OR?: Array<{
+          post_title?: { contains: string; mode: 'insensitive' };
+          post_content?: { contains: string; mode: 'insensitive' };
+        }>;
       } = {};
 
       if (status) {
@@ -199,7 +202,10 @@ class PostService {
       }
 
       // Map orderBy to Prisma field
-      const orderByMap: Record<string, 'post_date' | 'post_title' | 'post_modified' | 'comment_count'> = {
+      const orderByMap: Record<
+        string,
+        'post_date' | 'post_title' | 'post_modified' | 'comment_count'
+      > = {
         date: 'post_date',
         title: 'post_title',
         modified: 'post_modified',
@@ -232,9 +238,8 @@ class PostService {
   /**
    * Update post by ID
    */
-  async updatePost(id: string, postData: UpdatePostDto): Promise<Post | null> {
+  async updatePost(id: number, postData: UpdatePostDto): Promise<Post | null> {
     try {
-
       // Build update data object
       const updateData: {
         post_title?: string;
@@ -319,7 +324,7 @@ class PostService {
   /**
    * Delete post by ID
    */
-  async deletePost(id: string): Promise<boolean> {
+  async deletePost(id: number): Promise<boolean> {
     try {
       const post = await prisma().post.findUnique({
         where: { id },
@@ -345,7 +350,7 @@ class PostService {
   /**
    * Update comment count for a post
    */
-  async updateCommentCount(id: string, increment: boolean): Promise<void> {
+  async updateCommentCount(id: number, increment: boolean): Promise<void> {
     try {
       await prisma().post.update({
         where: { id },
@@ -364,7 +369,7 @@ class PostService {
   /**
    * Check if post exists
    */
-  async postExists(id: string): Promise<boolean> {
+  async postExists(id: number): Promise<boolean> {
     try {
       const count = await prisma().post.count({
         where: { id },
@@ -387,27 +392,6 @@ class PostService {
       return count > 0;
     } catch (error) {
       logger.error('Error checking author existence:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Increment view count for a post
-   */
-  async incrementViews(id: string): Promise<void> {
-    try {
-      await prisma().post.update({
-        where: { id },
-        data: {
-          views: {
-            increment: 1,
-          },
-        },
-      });
-
-      logger.info('Post views incremented', { postId: id });
-    } catch (error) {
-      logger.error('Error incrementing views:', error);
       throw error;
     }
   }

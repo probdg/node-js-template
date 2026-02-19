@@ -13,6 +13,7 @@
     "dev:fast": "cross-env NODE_OPTIONS='--conditions=development' tsx --watch --env-file .env src/index.ts",
     "dev:full": "cross-env NODE_OPTIONS='--conditions=development' tsx --watch --env-file .env.full src/index.ts",
     "build": "tsc",
+    "build:prisma": "tsx scripts/build-prisma.ts",
     "start": "node dist/index.js",
     "lint": "eslint . --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
@@ -20,9 +21,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky",
-    "migration:generate": "node scripts/generate-migration.js",
-    "migration:run": "node scripts/run-migrations.js"
+    "prepare": "husky && npm run build:prisma",
+    "prisma:generate": "npm run build:prisma && prisma generate",
+    "prisma:migrate": "npm run build:prisma && prisma migrate dev",
+    "prisma:migrate-reset": "npm run build:prisma && prisma migrate reset",
+    "migration:generate": "tsx scripts/check-tables.ts",
+    "migration:run": "tsx scripts/run-migrations.ts"
   },
   "keywords": [
     "nodejs",
@@ -37,6 +41,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@prisma/adapter-mariadb": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "bcrypt": "^5.1.1",
     "compression": "^1.7.4",

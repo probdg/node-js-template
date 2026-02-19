@@ -1,0 +1,13 @@
+// Log model
+model Log {
+  id         String   @id @default(uuid())
+  level      String
+  message    String   @db.Text
+  meta       Json?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([level])
+  @@index([created_at])
+  @@map("logs")
+}

@@ -1,0 +1,34 @@
+model Post {
+  id                    Int       @id @default(autoincrement()) @map("ID")
+  post_title            String
+  post_content          String    @db.Text
+  post_excerpt          String?   @db.Text
+  post_status           String    @default("draft")
+  post_type             String    @default("post")
+  post_author           String
+  post_name             String
+  post_password         String?   @default("")
+  comment_status        String    @default("open")
+  ping_status           String    @default("open")
+  to_ping               String?   @db.Text
+  pinged                String?   @db.Text
+  post_content_filtered String?   @db.Text
+  post_mime_type        String?
+  guid                  String?
+  post_parent           String?   @default("")
+  menu_order            Int       @default(0)
+  comment_count         Int       @default(0)
+  post_date             DateTime? @default(now())
+  post_date_gmt         DateTime?
+  post_modified         DateTime  @updatedAt
+  post_modified_gmt     DateTime?
+  created_at            DateTime  @default(now())
+  uuid                  String    @default(uuid()) @map("post_uuid")
+
+
+  @@index([post_author])
+  @@index([post_status])
+  @@index([post_type])
+  @@index([post_date])
+  @@map("wpny_posts")
+}

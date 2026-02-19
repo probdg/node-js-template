@@ -1,0 +1,10 @@
+model TermTaxonomy {
+    termTaxonomyId Int     @id @map("term_taxonomy_id")
+    termId         Int     @map("term_id")
+    taxonomy       String  @map("taxonomy")
+    description    String? @map("description")
+    parent         Int     @map("parent")
+    count          Int     @map("count")
+
+    @@map("wpny_term_taxonomy")
+}

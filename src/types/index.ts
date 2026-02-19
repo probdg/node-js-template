@@ -60,8 +60,8 @@ export interface CreateUserDto {
 }
 
 export interface UpdateUserDto {
-  email?: string;
-  username?: string;
+  email: string;
+  username: string;
   role?: UserRole;
   isActive?: boolean;
 }
@@ -194,7 +194,8 @@ export type CommentStatus = 'open' | 'closed';
 export type PingStatus = 'open' | 'closed';
 
 export interface Post {
-  id: string;
+  id: number;
+  uuid: string;
   title: string;
   content: string;
   excerpt: string | null;
@@ -208,7 +209,6 @@ export interface Post {
   parentId: string | null;
   menuOrder: number;
   commentCount: number;
-  views: number;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -252,6 +252,6 @@ export interface PostQueryParams {
   type?: PostType;
   authorId?: string;
   search?: string;
-  orderBy?: 'date' | 'title' | 'modified' | 'views' | 'comment_count';
+  orderBy?: 'date' | 'title' | 'modified' | 'comment_count';
   order?: 'asc' | 'desc';
 }

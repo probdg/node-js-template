@@ -1,5 +1,6 @@
+import type { Prisma } from '../../generated/prisma/client.js';
+
 import { databaseService } from './database.js';
-import { Prisma } from '@prisma/client';
 
 const prisma = () => databaseService.getClient();
 
@@ -91,7 +92,10 @@ class LogService {
 
     return result.reduce(
       (acc: Record<string, number>, item) => {
-        acc[item.level] = item._count.level;
+        const count = item._count;
+        if (count && typeof count === 'object' && 'level' in count) {
+          acc[item.level] = count.level;
+        }
         return acc;
       },
       {} as Record<string, number>

@@ -2,6 +2,13 @@ import express from 'express';
 import type { Request, Response } from 'express';
 
 import { HTTP_STATUS } from '@/constants';
+import type {
+  AuthRequest} from '@/middleware/authorization';
+import {
+  authenticateToken,
+  requirePermission,
+  optionalAuth
+} from '@/middleware/authorization';
 import { asyncHandler } from '@/middleware/error';
 import { rateLimiters } from '@/middleware/rate-limiter';
 import { validateBody, validateParams, validateQuery } from '@/middleware/validation';
@@ -25,13 +32,15 @@ const router = express.Router();
 
 /**
  * POST /posts
- * Create a new post
+ * Create a new post (requires authentication)
  */
 router.post(
   '/',
   rateLimiters.write,
+  authenticateToken,
+  requirePermission('post:create'),
   validateBody(createPostSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { authorId } = req.body;
 
     // Check if author exists
@@ -52,13 +61,14 @@ router.post(
 
 /**
  * GET /posts
- * Get all posts with filtering and pagination
+ * Get all posts with filtering and pagination (public or authenticated)
  */
 router.get(
   '/',
   rateLimiters.read,
+  optionalAuth,
   validateQuery(postQuerySchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { status, type, authorId, search, orderBy, order } = req.query as {
       status?: PostStatus;
       type?: PostType;
@@ -88,16 +98,25 @@ router.get(
 
 /**
  * GET /posts/:id
- * Get post by ID
+ * Get post by ID (public or authenticated)
  */
 router.get(
   '/:id',
   rateLimiters.read,
+  optionalAuth,
   validateParams(idParamSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params as { id: string };
+    const postId = parseInt(id, 10);
 
-    const post = await postService.getPostById(id);
+    if (isNaN(postId)) {
+      res
+        .status(HTTP_STATUS.BAD_REQUEST)
+        .json(createErrorResponse('INVALID_ID', 'Invalid post ID'));
+      return;
+    }
+
+    const post = await postService.getPostById(postId);
 
     if (!post) {
       res
@@ -106,18 +125,13 @@ router.get(
       return;
     }
 
-    // Increment view count (fire and forget)
-    postService.incrementViews(id).catch((error) => {
-      console.error('Failed to increment views:', error);
-    });
-
     res.status(HTTP_STATUS.OK).json(createApiResponse(post));
   })
 );
 
 /**
  * GET /posts/slug/:slug
- * Get post by slug
+ * Get post by slug (public)
  */
 router.get(
   '/slug/:slug',
@@ -134,29 +148,34 @@ router.get(
       return;
     }
 
-    // Increment view count (fire and forget)
-    postService.incrementViews(post.id).catch((error) => {
-      console.error('Failed to increment views:', error);
-    });
-
     res.status(HTTP_STATUS.OK).json(createApiResponse(post));
   })
 );
 
 /**
  * PUT /posts/:id
- * Update post by ID
+ * Update post by ID (requires authentication)
  */
 router.put(
   '/:id',
   rateLimiters.write,
+  authenticateToken,
+  requirePermission('post:update'),
   validateParams(idParamSchema),
   validateBody(updatePostSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params as { id: string };
+    const postId = parseInt(id, 10);
+
+    if (isNaN(postId)) {
+      res
+        .status(HTTP_STATUS.BAD_REQUEST)
+        .json(createErrorResponse('INVALID_ID', 'Invalid post ID'));
+      return;
+    }
 
     // Check if post exists
-    const existingPost = await postService.getPostById(id);
+    const existingPost = await postService.getPostById(postId);
     if (!existingPost) {
       res
         .status(HTTP_STATUS.NOT_FOUND)
@@ -164,7 +183,7 @@ router.put(
       return;
     }
 
-    const post = await postService.updatePost(id, req.body);
+    const post = await postService.updatePost(postId, req.body);
 
     if (!post) {
       res
@@ -179,16 +198,26 @@ router.put(
 
 /**
  * DELETE /posts/:id
- * Delete post by ID
+ * Delete post by ID (requires authentication)
  */
 router.delete(
   '/:id',
   rateLimiters.write,
+  authenticateToken,
+  requirePermission('post:delete'),
   validateParams(idParamSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params as { id: string };
+    const postId = parseInt(id, 10);
 
-    const deleted = await postService.deletePost(id);
+    if (isNaN(postId)) {
+      res
+        .status(HTTP_STATUS.BAD_REQUEST)
+        .json(createErrorResponse('INVALID_ID', 'Invalid post ID'));
+      return;
+    }
+
+    const deleted = await postService.deletePost(postId);
 
     if (!deleted) {
       res
@@ -200,7 +229,7 @@ router.delete(
     res.status(HTTP_STATUS.OK).json(
       createApiResponse({
         message: 'Post deleted successfully',
-        id,
+        id: postId,
       })
     );
   })

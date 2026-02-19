@@ -181,8 +181,8 @@ describe('UserService', () => {
 
       const mockUpdatedUser = {
         id: userId,
-        email: updateData.email!,
-        username: updateData.username!,
+        email: updateData.email,
+        username: updateData.username,
         role: USER_ROLES.USER,
         is_active: true,
         created_at: new Date(),
@@ -220,7 +220,10 @@ describe('UserService', () => {
 
       vi.mocked(databaseService.getClient).mockReturnValue(mockPrismaClient as never);
 
-      const result = await userService.updateUser('non-existent-id', { email: 'test@example.com' });
+      const result = await userService.updateUser('non-existent-id', {
+        email: 'test@example.com',
+        username: 'testuser',
+      });
 
       expect(result).toBeNull();
     });

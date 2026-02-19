@@ -5,7 +5,8 @@
       "Bash(npx tsc:*)",
       "Bash(test:*)",
       "Bash(node:*)",
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "Bash(find:*)"
     ]
   }
 }

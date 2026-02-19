@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { DatabaseTransport } from '../../src/services/database-transport';
 import { databaseService } from '../../src/services/database';
+import { DatabaseTransport } from '../../src/services/database-transport';
 
 // Mock the database service
 vi.mock('../../src/services/database', () => ({
